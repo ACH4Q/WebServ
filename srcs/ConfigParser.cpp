@@ -3,8 +3,10 @@
 #include <sstream>
 #include <cstdlib>
 #include <stdexcept>
+#include <iostream>
 
 ConfigParser::ConfigParser() : idx(0) {}
+
 ConfigParser::~ConfigParser() {}
 
 std::vector<ServerConfig> ConfigParser::getServers() const
@@ -42,7 +44,6 @@ void ConfigParser::tokenize(const std::string &filename)
                 finalLine += line[i];
             }
         }
-
         std::stringstream ss(finalLine);
         std::string word;
         while (ss >> word)
@@ -56,7 +57,6 @@ void ConfigParser::parse(const std::string &filename)
 {
     checkFile(filename);
     tokenize(filename);
-    
     idx = 0;
     while (idx < tokens.size())
     {
@@ -98,6 +98,12 @@ void ConfigParser::parseServerBlock()
             }
             expect(";");
         }
+        else if (tokens[idx] == "root")
+        {
+            idx++;
+            server.root = tokens[idx++];
+            expect(";");
+        }
         else if (tokens[idx] == "error_page")
         {
             idx++;
@@ -119,7 +125,7 @@ void ConfigParser::parseServerBlock()
         }
         else
         {
-            throw std::runtime_error("Error: Unknown directive " + tokens[idx]);
+            throw std::runtime_error("Error: Unknown directive in server block: " + tokens[idx]);
         }
     }
     expect("}");
@@ -139,10 +145,29 @@ void ConfigParser::parseLocationBlock(ServerConfig &server)
             loc.root = tokens[idx++];
             expect(";");
         }
+        else if (tokens[idx] == "alias")
+        {
+            idx++;
+            loc.alias = tokens[idx++];
+            expect(";");
+        }
+        else if (tokens[idx] == "client_max_body_size")
+        {
+            idx++;
+            loc.maxBodySize = static_cast<unsigned long>(toInt(tokens[idx++]));
+            expect(";");
+        }
         else if (tokens[idx] == "index")
         {
             idx++;
-            loc.index = tokens[idx++];
+            if (tokens[idx] != ";")
+            {
+                loc.index = tokens[idx++];
+                while (tokens[idx] != ";")
+                {
+                    idx++; 
+                }
+            }
             expect(";");
         }
         else if (tokens[idx] == "autoindex")
@@ -160,9 +185,18 @@ void ConfigParser::parseLocationBlock(ServerConfig &server)
             }
             expect(";");
         }
-        else
+        else if (tokens[idx] == "return")
         {
-             throw std::runtime_error("Error: Unknown directive location " + tokens[idx]);
+            idx++;
+            if (tokens[idx + 1] != ";")
+            {
+                 idx++;
+            }
+            loc.returnPath = tokens[idx++];
+            expect(";");
+        }
+        else {
+             throw std::runtime_error("Error: Unknown directive in location: " + tokens[idx]);
         }
     }
     expect("}");

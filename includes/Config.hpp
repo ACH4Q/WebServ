@@ -5,8 +5,7 @@
 #include <vector>
 #include <map>
 
-class Location
-{
+class Location {
     public:
         std::string                 path;
         std::string                 root;
@@ -15,12 +14,11 @@ class Location
         std::vector<std::string>    methods;
         std::string                 returnPath;
         std::string                 alias;
-
-        Location() : path(""), root(""), autoindex(false), index(""), returnPath(""), alias("") {}
+        unsigned long               maxBodySize; 
+        Location() : path(""), root(""), autoindex(false), index(""), returnPath(""), alias(""), maxBodySize(0) {}
 };
 
-class ServerConfig
-{
+class ServerConfig {
     public:
         int                         port;
         std::string                 host;
