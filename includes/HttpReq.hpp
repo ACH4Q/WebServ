@@ -32,7 +32,15 @@ class HttpRequest
         void    parseChunked(std::string &line);
 
     public:
-
+        HttpRequest();
+        ~HttpRequest();
+        bool    parse(const char *data, size_t size);
+        std::string getMethod() const;
+        std::string getPath() const;
+        std::string getHeader(const std::string &key) const;
+        std::string getBody() const;
+        bool        isFinished() const;
+        void        reset();
 };
 
 #endif
