@@ -18,8 +18,10 @@ int main(int argc, char **argv)
         std::cout << "Found " << servers.size() << " servers." << std::endl;
         if (!servers.empty())
         {
-            std::cout << "Server 1 listening on port: " << servers[0].port << std::endl;
-            std::cout << "Server 1 root: " << servers[0].locations[0].root << std::endl;
+            for (unsigned long  i = 0; i < servers.size(); i++)
+            {
+                std::cout << "Server " << i + 1 << " listening on port: " << servers[i].port << std::endl;
+            }
         }
     } catch (const std::exception &e)
     {
