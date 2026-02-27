@@ -156,3 +156,23 @@ RequestParseState HttpRequest::getState() const
 {
     return state;
 }
+
+const std::string& HttpRequest::getVersion() const
+{
+    return version;
+}
+
+const std::string& HttpRequest::getBody() const
+{
+    return body;
+}
+
+const std::map<std::string, std::string>& HttpRequest::getHeaders() const
+{
+    return headers;
+}
+
+int HttpRequest::getErrorCode() const
+{
+    return errorCode;
+}

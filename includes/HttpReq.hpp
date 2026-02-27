@@ -44,6 +44,7 @@ public:
     const std::map<std::string, std::string>& getHeaders() const;
     RequestParseState                   getState() const;
     int                                 getErrorCode() const;
+
 };
 
 #endif
