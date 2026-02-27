@@ -148,12 +148,11 @@ const std::string& HttpRequest::getMethod() const
 }
 
 const std::string& HttpRequest::getPath() const
-{ return
-    path;
+{
+    return path;
 }
 
 RequestParseState HttpRequest::getState() const
 {
-    return
-    state;
+    return state;
 }
