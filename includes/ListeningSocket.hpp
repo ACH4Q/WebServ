@@ -6,6 +6,8 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <stdexcept>
+#include <arpa/inet.h>
+#include <fcntl.h>
 
 class ListeningSocket {
 private:

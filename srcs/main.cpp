@@ -1,5 +1,6 @@
 #include "../includes/ConfigParser.hpp"
 #include <iostream>
+#include "ManageServers.hpp"
 
 int main(int argc, char **argv)
 {
@@ -18,7 +19,9 @@ int main(int argc, char **argv)
         std::cout << "Found " << servers.size() << " servers." << std::endl;
         if (!servers.empty())
         {
-            
+            SocketManager manager;
+            manager.generateListeningSockets(servers);
+            std::cout << "Listening sockets created for all servers." << std::endl;
         }
     } catch (const std::exception &e)
     {
