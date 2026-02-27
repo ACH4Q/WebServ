@@ -18,7 +18,9 @@ class ConfigParser
         void    parseLocationBlock(ServerConfig &server);
         void    expect(const std::string &token);
         int     toInt(const std::string &str);
-
+        bool    isValidPort(const std::string &portStr) const;
+        bool    isValidIP(const std::string &ip) const;
+        bool    isNumeric(const std::string &str) const;
     public:
         ConfigParser();
         ~ConfigParser();
