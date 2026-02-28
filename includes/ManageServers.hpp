@@ -8,11 +8,11 @@
 
 class SocketManager {
 private:
-    std::vector<ListeningSocket> _listeningSockets;
+    std::vector<ListeningSocket *> _listeningSockets;
 
 public:
-    void addSocket(const ListeningSocket& sock);
-    std::vector<ListeningSocket>& getSockets();
+    void addSocket( ListeningSocket *sock);
+    std::vector<ListeningSocket *> getSockets();
     std::vector<int> getFds() const;
     void generateListeningSockets(const std::vector<ServerConfig>& servers);
     void closeAllSockets();
