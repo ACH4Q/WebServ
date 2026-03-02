@@ -53,3 +53,7 @@ void ListeningSocket::setNonBlocking() {
 int ListeningSocket::getFd() const {
     return _fd;
 }
+
+int ListeningSocket::getPort() const {
+    return _server->port;
+}
