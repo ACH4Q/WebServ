@@ -1,6 +1,9 @@
 #include "../includes/ConfigParser.hpp"
 #include <iostream>
 #include "ManageServers.hpp"
+#include "ListeningSocket.hpp"
+#include "EpollManager.hpp"
+#include "Event.hpp"
 
 int main(int argc, char **argv)
 {
@@ -21,14 +24,12 @@ int main(int argc, char **argv)
         {
             SocketManager manager;
             manager.generateListeningSockets(servers);
-            std::cout << "Listening sockets created for all servers." << std::endl;
             std::vector<int> fds = manager.getFds();
-            for (size_t i = 0; i < servers.size(); ++i)
-            {
-                std::cout << "Listening on ports: ";
-                std::cout << servers[i].port << " (fd: " << fds[i] << ") ";
-                std::cout << std::endl;
-            }
+            EpollManager epollManager;
+            for (size_t i = 0; i < fds.size(); ++i)
+                epollManager.ctrl(fds[i], EPOLLIN, EPOLL_CTL_ADD);
+            Event event;
+            event.run(manager, epollManager);
             // manager.cleanup();
         }
     } catch (const std::exception &e)

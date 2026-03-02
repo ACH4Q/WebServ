@@ -23,6 +23,7 @@ public:
     void startListening(int backlog);
     void setNonBlocking();
     int getFd() const;
+    int getPort() const ;
 };
 
 
