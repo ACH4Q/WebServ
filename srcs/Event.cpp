@@ -35,6 +35,7 @@ void Event::run(SocketManager& manager, EpollManager& epollManager) {
         }
         else {
             std::cout << "Data ready to read on client fd: " << fd << std::endl;
+            
         }
     }
 }
