@@ -12,12 +12,29 @@ void Event::run(SocketManager& manager, EpollManager& epollManager) {
               << std::endl;
     }
     while (true) {
+        bool flag = false;
         std::vector<int> readyFds = epollManager.wait(-1);
+        int fd;
         for (size_t i = 0; i < readyFds.size(); ++i) {
-            int fd = readyFds[i];
-            std::cout << "Ready fd: " << fd << std::endl;
-            // Handle events for the ready file descriptors
-            // This is where you would accept new connections, read/write data, etc.
+            fd = readyFds[i];
+            if (fd == manager.getSockets()[i]->getFd()){
+                flag = true;
+                break;
+            }
+        }
+        if (flag){
+            std::cout << "New connection on one of the listening sockets!" << std::endl;
+            if ((_clientFd = accept(fd, NULL, NULL)) == -1) {
+                std::cerr << "Failed to accept new connection" << std::endl;
+            } else {
+                int flags = fcntl(_clientFd, F_GETFL, 0);
+                fcntl(_clientFd, F_SETFL, flags | O_NONBLOCK);
+                epollManager.ctrl(_clientFd, EPOLLIN, EPOLL_CTL_ADD);
+                std::cout << "Accepted new connection with fd: " << _clientFd << std::endl;
+            }
+        }
+        else {
+            std::cout << "Data ready to read on client fd: " << fd << std::endl;
         }
     }
 }

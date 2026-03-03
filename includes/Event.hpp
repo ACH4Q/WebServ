@@ -8,6 +8,8 @@
 #include <vector>
 
 class Event{
+    private:
+        int _clientFd;
     public:
         Event();
         ~Event();
