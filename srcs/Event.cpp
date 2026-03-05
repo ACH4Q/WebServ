@@ -14,57 +14,86 @@ Event::~Event() {}
 void Event::run(SocketManager& manager, EpollManager& epollManager) {
     for (size_t i = 0; i < manager.getSockets().size(); ++i)
     {
-        std::cout << "http://localhost:" 
-              << manager.getSockets()[i]->getPort() 
-              << std::endl;
+        std::cout << "http://localhost:"
+                  << manager.getSockets()[i]->getPort()
+                  << std::endl;
     }
-    
+
     while (true) {
         std::vector<int> readyFds = epollManager.wait(-1);
-        
+
         for (size_t i = 0; i < readyFds.size(); ++i) {
             int fd = readyFds[i];
+
             bool isListeningSocket = false;
+            size_t serverIndex = 0;
+
             for (size_t j = 0; j < manager.getSockets().size(); ++j) {
-                if (fd == manager.getSockets()[j]->getFd()){
+                if (fd == manager.getSockets()[j]->getFd()) {
                     isListeningSocket = true;
+                    serverIndex = j;
                     break;
                 }
             }
 
-            if (isListeningSocket){
+            if (isListeningSocket)
+            {
                 std::cout << "New connection on one of the listening sockets!" << std::endl;
+
                 if ((_clientFd = accept(fd, NULL, NULL)) == -1) {
                     std::cerr << "Failed to accept new connection" << std::endl;
-                } else {
+                }
+                else
+                {
                     int flags = fcntl(_clientFd, F_GETFL, 0);
                     fcntl(_clientFd, F_SETFL, flags | O_NONBLOCK);
+
                     epollManager.ctrl(_clientFd, EPOLLIN, EPOLL_CTL_ADD);
-                    std::cout << "Accepted new connection with fd: " << _clientFd << std::endl;
+
+                    clientServerIndex[_clientFd] = serverIndex;
+
+                    std::cout << "Accepted new connection with fd: "
+                              << _clientFd << std::endl;
                 }
             }
             else
             {
                 std::cout << "Data ready to read on client fd: " << fd << std::endl;
+
                 char buffer[4096];
                 int bytesRead = recv(fd, buffer, sizeof(buffer), 0);
-                
+
                 if (bytesRead > 0)
                 {
                     std::string rawData(buffer, bytesRead);
                     requests[fd].parse(rawData);
-                    
+
                     if (requests[fd].getState() == Request_Finished)
                     {
-                        std::cout << "Successfully parsed request: " << requests[fd].getMethod() << " " << requests[fd].getPath() << requests[fd].getBody() << requests[fd].getVersion() << std::endl;
+                        std::cout << "Successfully parsed request: "
+                                  << requests[fd].getMethod() << " "
+                                  << requests[fd].getPath() << " "
+                                  << requests[fd].getBody() << " "
+                                  << requests[fd].getVersion()
+                                  << std::endl;
                         Router routeResult;
-
+                        size_t index = clientServerIndex[fd];
+                        RouteResult result = routeResult.resolve(requests[fd],*manager.getSockets()[index]->getServer());
+                        std::cout << "server root: " << manager.getSockets()[index]->getServer()->root << std::endl;
+                        std::cout << "final path: " << result.finalPath << std::endl;
+                        std::cout << "server port: " << manager.getSockets()[index]->getPort() << std::endl;
+                        std::cout << "server host: " << manager.getSockets()[index]->getServer()->host << std::endl;
+                        std::cout << "is allowed: " << result.isAllowed << std::endl;
+                        std::cout << "==================================" << std::endl;
                     }
-                } else
+                }
+                else
                 {
                     epollManager.ctrl(fd, 0, EPOLL_CTL_DEL);
                     close(fd);
-                    requests.erase(fd); 
+
+                    requests.erase(fd);
+                    clientServerIndex.erase(fd);
                 }
             }
         }

@@ -24,6 +24,7 @@ public:
     void setNonBlocking();
     int getFd() const;
     int getPort() const ;
+    ServerConfig* getServer() const;
 };
 
 

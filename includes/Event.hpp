@@ -13,7 +13,7 @@ class Event{
     private:
         int _clientFd;
         std::map<int, HttpRequest> requests;
-        
+        std::map<int, size_t> clientServerIndex; 
     public:
         Event();
         ~Event();

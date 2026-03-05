@@ -57,3 +57,7 @@ int ListeningSocket::getFd() const {
 int ListeningSocket::getPort() const {
     return _server->port;
 }
+
+ServerConfig* ListeningSocket::getServer() const {
+    return _server;
+}

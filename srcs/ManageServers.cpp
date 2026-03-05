@@ -43,3 +43,7 @@ void SocketManager::closeAllSockets() {
     }
     _listeningSockets.clear();
 }
+
+std::vector<ListeningSocket *> SocketManager::getListeningSockets() const {
+    return _listeningSockets;
+}

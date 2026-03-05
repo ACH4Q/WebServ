@@ -16,6 +16,7 @@ public:
     std::vector<int> getFds() const;
     void generateListeningSockets(const std::vector<ServerConfig>& servers);
     void closeAllSockets();
+    std::vector<ListeningSocket *> getListeningSockets() const;
     
     ~SocketManager();
 };
