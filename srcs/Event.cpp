@@ -47,11 +47,8 @@ void Event::run(SocketManager& manager, EpollManager& epollManager) {
                 {
                     int flags = fcntl(_clientFd, F_GETFL, 0);
                     fcntl(_clientFd, F_SETFL, flags | O_NONBLOCK);
-
                     epollManager.ctrl(_clientFd, EPOLLIN, EPOLL_CTL_ADD);
-
                     clientServerIndex[_clientFd] = serverIndex;
-
                     std::cout << "Accepted new connection with fd: "
                               << _clientFd << std::endl;
                 }
@@ -59,15 +56,12 @@ void Event::run(SocketManager& manager, EpollManager& epollManager) {
             else
             {
                 std::cout << "Data ready to read on client fd: " << fd << std::endl;
-
                 char buffer[4096];
                 int bytesRead = recv(fd, buffer, sizeof(buffer), 0);
-
                 if (bytesRead > 0)
                 {
                     std::string rawData(buffer, bytesRead);
                     requests[fd].parse(rawData);
-
                     if (requests[fd].getState() == Request_Finished)
                     {
                         std::cout << "Successfully parsed request: "
@@ -84,14 +78,18 @@ void Event::run(SocketManager& manager, EpollManager& epollManager) {
                         std::cout << "server port: " << manager.getSockets()[index]->getPort() << std::endl;
                         std::cout << "server host: " << manager.getSockets()[index]->getServer()->host << std::endl;
                         std::cout << "is allowed: " << result.isAllowed << std::endl;
+                        std::cout << "Erorr code: " << requests[fd].getErrorCode() << std::endl;
                         std::cout << "==================================" << std::endl;
+                        HttpResponse response;
+                        response.setStatusLine(result.finalPath);
+                        std::string responseStr = response.getStatusLine();
+                        std::cout << "Response to be sent:\n" << responseStr;
                     }
                 }
                 else
                 {
                     epollManager.ctrl(fd, 0, EPOLL_CTL_DEL);
                     close(fd);
-
                     requests.erase(fd);
                     clientServerIndex.erase(fd);
                 }
