@@ -219,13 +219,14 @@ std::string handlePost(const HttpRequest& req, const RouteResult& route)
         targetPath += filename.str();
     }
     std::ofstream outFile(targetPath.c_str(), std::ios::binary);
-    if (!outFile.is_open())
-    {
-        std::cerr << "[POST] Error: Could not open " << targetPath << " for writing. Check folder permissions." << std::endl;
-        return "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
-    }
-    outFile.write(req.getBody().data(), req.getBody().length());
-    outFile.close();
+    // if (!outFile.is_open())
+    // {
+    //     std::cerr << "[POST] Error: Could not open " << targetPath << " for writing. Check folder permissions." << std::endl;
+    //     return "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+    // }
+    // outFile.write(req.getBody().data(), req.getBody().length());
+    // outFile.close();
+    //SENDI L9LWA
     std::cout << "[POST] Successfully created file: " << targetPath << " (" << req.getBody().length() << " bytes)" << std::endl;
     return "HTTP/1.1 201 Created\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
 }

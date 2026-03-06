@@ -250,7 +250,7 @@ bool ConfigParser::isValidPort(const std::string &portStr) const
     if (!isNumeric(portStr))
         return false;
     int port = std::atoi(portStr.c_str());
-    return (port >= 1 && port <= 65535);
+    return (port >= 1024 && port <= 65535);
 }
 
 bool ConfigParser::isValidIP(const std::string &ip) const

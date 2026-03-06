@@ -87,16 +87,10 @@ void Event::run(SocketManager& manager, EpollManager& epollManager) {
                         HttpResponse response;
                         response.generateResponse(requests[fd], result);
                         std::string responseStr = response.getStatusLine();
-                        std::cout << "Status Line: " << response.getStatusLine() << std::endl;
-                        std::cout << "Headers: " << std::endl;
-                        for (std::map<std::string, std::string>::const_iterator it = response.getResponseHeaders().begin(); it != response.getResponseHeaders().end(); ++it) {
-                            responseStr += it->first + ": " + it->second + "\r\n";
-                            std::cout << it->first << ": " << it->second << std::endl;
-                        }
-                        std::cout << "Body: " << response.getResponseBody() << std::endl;
                         responseStr += "\r\n" + response.getResponseBody();
-                        std::cout << "Full Response:\n" << responseStr << std::endl;
+                        std::cout << "==================================" << std::endl;
                         std::cout << "Response to be sent:\n" << responseStr;
+                        std::cout << "==================================" << std::endl;
                         send(fd, responseStr.c_str(), responseStr.size(), 0);
                         epollManager.ctrl(fd, 0, EPOLL_CTL_DEL);
                         close(fd);
