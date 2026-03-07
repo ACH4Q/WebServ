@@ -85,13 +85,7 @@ void Event::run(SocketManager& manager, EpollManager& epollManager) {
                         std::cout << "Erorr code: " << requests[fd].getErrorCode() << std::endl;
                         std::cout << "==================================" << std::endl;
                         HttpResponse response;
-                        response.generateResponse(requests[fd], result);
-                        std::string responseStr = response.getStatusLine();
-                        responseStr += "\r\n" + response.getResponseBody();
-                        std::cout << "==================================" << std::endl;
-                        std::cout << "Response to be sent:\n" << responseStr;
-                        std::cout << "==================================" << std::endl;
-                        send(fd, responseStr.c_str(), responseStr.size(), 0);
+                        response.generateResponse(requests[fd], result, fd);
                         epollManager.ctrl(fd, 0, EPOLL_CTL_DEL);
                         close(fd);
                         requests.erase(fd);

@@ -9,6 +9,7 @@
 #include <iostream>
 #include <fstream>
 #include <ctime>
+#include <sys/socket.h>
 
 const std::string& HttpResponse::getStatusLine() const
 {
@@ -105,7 +106,7 @@ void HttpResponse::setResponseBody(std::string path)
     int fd = open(path.c_str(), O_RDONLY);
     if (fd == -1)
     {
-        response_body = "Error opening file";
+        response_body = "ERROR: 404 Not Found";
         return;
     }
     char buffer[4096];
@@ -144,27 +145,30 @@ void HttpResponse::setResponseHeaders(std::string path)
     response_headers["Server"] = "webserv";
 }
 
-void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeResult)
+void HttpResponse::write_response()
 {
-    //TO DO LIST
-    // ├─ 1. Determine the status code based on the request and route result AND BASED ON THE METHOD
-    // │      ├─ 200 OK (for successful GET/POST/DELETE)
-    // │      ├─ 201 Created (for successful POST that creates a resource)
-    // │      ├─ 204 No Content (for successful DELETE)
-    // │      ├─ 301 Moved Permanently (if resource has moved, use Location header to indicate new URL)
-    // │      ├─ 400 Bad Request (if request is malformed)
-    // │      ├─ 403 Forbidden (if access is denied)
-    // │      ├─ 404 Not Found (if resource doesn’t exist)
-    // │      ├─ 405 Method Not Allowed (if method is not supported by the resource)
-    // │      ├─ 413 Payload Too Large (if POST body exceeds max size)
-    // │      ├─ 500 Internal Server Error (for unexpected server errors)
-    // │      ├─ 501 Not Implemented (if method is not implemented by the server)
-    // │      └─ 503 Service Unavailable (if server is overloaded or down for maintenance)
-                      
+    std::string finalResponse = status_line;
+    for (std::map<std::string, std::string>::const_iterator it = response_headers.begin(); it != response_headers.end(); ++it)
+        finalResponse += it->first + ": " + it->second + "\r\n";
+    finalResponse += "\r\n" + response_body;
+    send(_clientFd, finalResponse.c_str(), finalResponse.size(), 0);
+}
+
+void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeResult, int clientFd)
+{
+    _clientFd = clientFd;
     decideStatus(req, routeResult.finalPath, !routeResult.isAllowed);
-    if (fileSize < 1024 *1024){
-        setResponseBody(routeResult.finalPath);
-        setResponseHeaders(routeResult.finalPath);
+    std::cout << "--------------------------------" << std::endl;
+    std::cout << "METHOD :"<< req.getMethod() << std::endl;
+    std::cout << "--------------------------------" << std::endl;
+    if (req.getMethod() == "GET")
+    {
+        std::cout << "Decided status code: " << status_code << std::endl;
+        if (fileSize < 1024 *1024){
+            setResponseBody(routeResult.finalPath);
+            setResponseHeaders(routeResult.finalPath);
+            write_response();
+        }
     }
     
     // ├─ 4. Set headers
