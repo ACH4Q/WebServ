@@ -40,8 +40,6 @@ void Event::run(SocketManager& manager, EpollManager& epollManager) {
 
             if (isListeningSocket)
             {
-                std::cout << "New connection on one of the listening sockets!" << std::endl;
-
                 if ((_clientFd = accept(fd, NULL, NULL)) == -1) {
                     std::cerr << "Failed to accept new connection" << std::endl;
                 }
@@ -51,13 +49,10 @@ void Event::run(SocketManager& manager, EpollManager& epollManager) {
                     fcntl(_clientFd, F_SETFL, flags | O_NONBLOCK);
                     epollManager.ctrl(_clientFd, EPOLLIN, EPOLL_CTL_ADD);
                     clientServerIndex[_clientFd] = serverIndex;
-                    std::cout << "Accepted new connection with fd: "
-                              << _clientFd << std::endl;
                 }
             }
             else
             {
-                std::cout << "Data ready to read on client fd: " << fd << std::endl;
                 char buffer[4096];
                 int bytesRead = recv(fd, buffer, sizeof(buffer), 0);
                 if (bytesRead > 0)
@@ -77,13 +72,6 @@ void Event::run(SocketManager& manager, EpollManager& epollManager) {
                         RouteResult result = routeResult.resolve(requests[fd],*manager.getSockets()[index]->getServer());
                         AutoIndex autoIndex;
                         std::string autoIndexContent = autoIndex.generate(result.finalPath, requests[fd].getPath());
-                        std::cout << "server root: " << manager.getSockets()[index]->getServer()->root << std::endl;
-                        std::cout << "final path: " << result.finalPath << std::endl;
-                        std::cout << "server port: " << manager.getSockets()[index]->getPort() << std::endl;
-                        std::cout << "server host: " << manager.getSockets()[index]->getServer()->host << std::endl;
-                        std::cout << "is allowed: " << result.isAllowed << std::endl;
-                        std::cout << "Erorr code: " << requests[fd].getErrorCode() << std::endl;
-                        std::cout << "==================================" << std::endl;
                         HttpResponse response;
                         response.generateResponse(requests[fd], result, fd, autoIndexContent);
                         epollManager.ctrl(fd, 0, EPOLL_CTL_DEL);

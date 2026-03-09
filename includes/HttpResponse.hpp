@@ -22,17 +22,25 @@ class HttpResponse : public HttpRequest, public Router {
         std::string connection;
         int status_code;
         off_t fileSize;
+        bool errorOccurred;
     public :
         void generateResponse(const HttpRequest& req,  RouteResult& routeResult, int clientFd, const std::string& autoIndexContent);
-        void setStatusLine(int code);
-        void setResponseHeaders(std::string path);
-        void setResponseBody(std::string path);
+        
         const std::string& getStatusLine() const;
         const std::map<std::string, std::string>& getResponseHeaders() const;
-        std::string &find_requested_file(std::string& path);
         const std::string& getResponseBody() const;
-        void decideStatus(const HttpRequest& req, const std::string& path, bool serverError);
+        int getStatusCode() const;
+        void generate_status_code(const HttpRequest& req, const RouteResult& routeResult);
+        void check_error(const HttpRequest& req, const RouteResult& routeResult);
+        int check_status_fourhundred(const HttpRequest& req, const RouteResult& routeResult);
+        void setStatusLine();
+        void setResponseHeaders(std::string path);
+        void Status_file(const RouteResult& routeResult);
+        void send_small_files(const RouteResult& routeResult, const std::string& autoIndexContent);
+        void set_body(std::string& response, const std::string& path);
         void write_response();
+        void set_directory_autoindex(const std::string& autoIndexContent);
+        int check_favIco(const RouteResult& routeResult);
 };
 
 #endif

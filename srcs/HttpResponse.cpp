@@ -11,26 +11,49 @@
 #include <ctime>
 #include <sys/socket.h>
 
-const std::string& HttpResponse::getStatusLine() const
+int HttpResponse::check_status_fourhundred(const HttpRequest& req, const RouteResult& routeResult)
 {
-    return status_line;
+    if (!routeResult.isAllowed){
+        errorOccurred = true;
+        return 405;
+    }
+    if (routeResult.isDirectory && req.getMethod() != "GET")
+    {
+        errorOccurred = true;
+        return 403;
+    }
+    if (!routeResult.isDirectory && access(routeResult.finalPath.c_str(), F_OK) != 0)
+    {
+        errorOccurred = true;
+        return 404;
+    }
+    if (req.getMethod() == "POST" && req.getBody().length() > routeResult.location.maxBodySize)
+    {
+        errorOccurred = true;
+        return 413;
+    }
+    return 0;
 }
 
-const std::string& HttpResponse::getResponseBody() const
+void HttpResponse::generate_status_code(const HttpRequest& req, const RouteResult& routeResult)
 {
-    return response_body;
+    status_code = 0;
+    if ((status_code = check_status_fourhundred(req, routeResult)) != 0){
+        errorOccurred = true;
+        return;
+    }
+    status_code = 200;
+    errorOccurred = false;
 }
 
-const std::map<std::string, std::string>& HttpResponse::getResponseHeaders() const
+void HttpResponse::check_error(const HttpRequest& req, const RouteResult& routeResult)
 {
-    return response_headers;
+    generate_status_code(req, routeResult);
 }
 
-void HttpResponse::setStatusLine(int code)
+void HttpResponse::setStatusLine()
 {
-    status_code = code;
-
-    switch (code)
+    switch (status_code)
     {
         case 200:
             status_line = "HTTP/1.1 200 OK\r\n";
@@ -64,59 +87,8 @@ void HttpResponse::setStatusLine(int code)
             break;
         default:
             status_line = "HTTP/1.1 500 Internal Server Error\r\n";
-            status_code = 500;
             break;
     }
-}
-
-void HttpResponse::decideStatus(const HttpRequest& req, const std::string& path, bool serverError)
-{
-    int code;
-    struct stat fileStat;
-    if (req.getMethod() != "GET" && req.getMethod() != "POST" && req.getMethod() != "DELETE")
-        code = 405;
-    else
-    {
-        if (stat(path.c_str(), &fileStat) != 0)
-            code = 404;
-        else if (!S_ISREG(fileStat.st_mode))
-            code = 403;
-        else
-        {
-            int fd = open(path.c_str(), O_RDONLY);
-            if (fd == -1)
-                code = 403;
-            else
-            {
-                if (serverError)
-                    code = 500;
-                else
-                    code = 200;
-            }
-            close(fd);
-        }
-    }
-    setStatusLine(code);
-    fileSize = fileStat.st_size;
-}
-
-
-void HttpResponse::setResponseBody(std::string path)
-{
-    int fd = open(path.c_str(), O_RDONLY);
-    if (fd == -1)
-    {
-        response_body = "ERROR: 404 Not Found";
-        return;
-    }
-    char buffer[4096];
-    ssize_t bytesRead;
-    while ((bytesRead = read(fd, buffer, sizeof(buffer))) > 0)
-        response_body.append(buffer, bytesRead);
-    std::ostringstream oss;
-    oss << response_body.size();
-    content_length = oss.str();
-    close(fd);
 }
 
 void HttpResponse::setResponseHeaders(std::string path)
@@ -149,6 +121,34 @@ void HttpResponse::setResponseHeaders(std::string path)
     response_headers["Server"] = "webserv";
 }
 
+void HttpResponse::Status_file(const RouteResult& routeResult)
+{
+    struct stat fileStat;
+    if (stat(routeResult.finalPath.c_str(), &fileStat) == 0)
+    {
+        fileSize = fileStat.st_size;
+    }
+    else
+    {
+        fileSize = 0;
+        content_length = "0";
+    }
+}
+
+void HttpResponse::set_body(std::string& response, const std::string& path)
+{
+    int fd = open(path.c_str(), O_RDONLY);
+    char buffer[4096];
+    ssize_t bytesRead;
+    while ((bytesRead = read(fd, buffer, sizeof(buffer))) > 0)
+        response_body.append(buffer, bytesRead);
+    std::ostringstream oss;
+    oss << response_body.size();
+    content_length = oss.str();
+    response += "Content-Length: " + content_length + "\r\n";
+    close(fd);
+}
+
 void HttpResponse::write_response()
 {
     std::string finalResponse = status_line;
@@ -158,114 +158,127 @@ void HttpResponse::write_response()
     send(_clientFd, finalResponse.c_str(), finalResponse.size(), 0);
 }
 
+void HttpResponse::set_directory_autoindex( const std::string& autoIndexContent){
+        response_body = autoIndexContent;
+        std::string contentType = "text/html";
+        std::ostringstream oss;
+        oss << response_body.size();
+        content_length = oss.str();
+        response_headers["Content-Type"] = contentType;
+        response_headers["Content-Length"] = content_length;
+        response_headers["Connection"] = "close";
+        response_headers["Server"] = "webserv";
+        write_response();
+}
+
+void HttpResponse::send_small_files(const RouteResult& routeResult, const std::string& autoIndexContent)
+{
+    if (routeResult.isDirectory && routeResult.location.autoindex)
+        set_directory_autoindex(autoIndexContent);
+    else
+    {
+        setResponseHeaders(routeResult.finalPath);
+        set_body(response_body, routeResult.finalPath);
+        write_response();
+    }
+}
+int HttpResponse::check_favIco(const RouteResult& routeResult)
+{
+        std::string path = routeResult.finalPath;
+        size_t dotPos = path.find_last_of('.');
+        if (dotPos != std::string::npos)
+        {
+            std::string extension = path.substr(dotPos + 1);
+            if (extension == "ico")
+                return 1;
+        }
+    return 0;
+}
+
 void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeResult, int clientFd, const std::string& autoIndexContent)
 {
-    _clientFd = clientFd;
-    decideStatus(req, routeResult.finalPath, !routeResult.isAllowed);
-    std::cout << "--------------------------------" << std::endl;
-    std::cout << "METHOD :"<< req.getMethod() << std::endl;
-    std::cout << "--------------------------------" << std::endl;
-    if (req.getMethod() == "GET")
+    if (check_favIco(routeResult))
+        return;
+    check_error(req, routeResult);
+    if (!errorOccurred)
     {
-        std::cout << "Decided status code: " << status_code << std::endl;
-        if (fileSize < 1024 *1024){
-            if (routeResult.isDirectory && routeResult.location.autoindex)
-            {
-                setStatusLine(200);
-                response_body = autoIndexContent;
-                std::string contentType = "text/html";
-                std::ostringstream oss;
-                oss << response_body.size();
-                content_length = oss.str();
-                response_headers["Content-Type"] = contentType;
-                response_headers["Content-Length"] = content_length;
-                response_headers["Connection"] = "close";
-                response_headers["Server"] = "webserv";
-                write_response();
-            }
-            else
-            {
-            setResponseBody(routeResult.finalPath);
-            setResponseHeaders(routeResult.finalPath);
-            write_response();
-        }
-    }
-    
-    // ├─ 4. Set headers
-    // │      ├─ Content-Type (based on file extension)
-    // │      ├─ Content-Length (if small file)
-    // │      ├─ Transfer-Encoding: chunked (if streaming)
-    // │      ├─ Connection: close
-    // │      └─ Server: webserv
-    // │
-    // ├─ 5. Prepare the body
-    // │      ├─ Small file → read all into memory
-    // │      └─ Large file → don’t read all at once, prepare for streaming
-    // │
-    // └─ 6. Response is ready to send
-    //        ├─ Small file → send in one go
-    //        └─ Large file → send in chunks from file
-    }
-}
-
-std::string handleDelete(const RouteResult& route)
-{
-    if (!route.isAllowed)
-    {
-        return "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
-    }
-    if (route.isDirectory)
-    {
-        return "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
-    }
-    if (access(route.finalPath.c_str(), F_OK) != 0)
-    {
-        return "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
-    }
-    if (access(route.finalPath.c_str(), W_OK) != 0) 
-    {
-        return "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
-    }
-    if (std::remove(route.finalPath.c_str()) == 0)
-    {
-        std::cout << "[DELETE] Successfully removed: " << route.finalPath << std::endl;
-        return "HTTP/1.1 204 No Content\r\nConnection: keep-alive\r\n\r\n";
-    } else
-    {
-        return "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
-    }
-}
-
-std::string handlePost(const HttpRequest& req, const RouteResult& route)
-{
-    if (!route.isAllowed)
-    {
-        return "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
-    }
-    if (req.getBody().length() > route.location.maxBodySize)
-    {
-        return "HTTP/1.1 413 Payload Too Large\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
-    }
-    std::string targetPath = route.finalPath;
-    struct stat s;
-    if (stat(targetPath.c_str(), &s) == 0 && S_ISDIR(s.st_mode))
-    {
-        if (targetPath[targetPath.length() - 1] != '/')
+        _clientFd = clientFd;
+        if (req.getMethod() == "GET")
         {
-            targetPath += "/";
+            Status_file(routeResult);
+            setStatusLine();
+            if (fileSize < 1024 *1024)
+                send_small_files(routeResult, autoIndexContent);
+            else {
+                std::cout << "[Response] File is larger than 1MB, sending with sendfile..." << std::endl;
+            }
         }
-        std::ostringstream filename;
-        filename << "upload_" << time(NULL) << ".bin";
-        targetPath += filename.str();
     }
-    std::ofstream outFile(targetPath.c_str(), std::ios::binary);
-    if (!outFile.is_open())
+    else
     {
-        std::cerr << "[POST] Error: Could not open " << targetPath << " for writing. Check folder permissions." << std::endl;
-        return "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+        //here i'll implement error responses for 400, 403, 404, 405, 413
+        std::cout << "[Response] Error occurred, status code: " << status_code << std::endl;
     }
-    outFile.write(req.getBody().data(), req.getBody().length());
-    outFile.close();
-    std::cout << "[POST] Successfully created file: " << targetPath << " (" << req.getBody().length() << " bytes)" << std::endl;
-    return "HTTP/1.1 201 Created\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
 }
+
+// std::string handleDelete(const RouteResult& route)
+// {
+//     if (!route.isAllowed)
+//     {
+//         return "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+//     }
+//     if (route.isDirectory)
+//     {
+//         return "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+//     }
+//     if (access(route.finalPath.c_str(), F_OK) != 0)
+//     {
+//         return "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+//     }
+//     if (access(route.finalPath.c_str(), W_OK) != 0) 
+//     {
+//         return "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+//     }
+//     if (std::remove(route.finalPath.c_str()) == 0)
+//     {
+//         std::cout << "[DELETE] Successfully removed: " << route.finalPath << std::endl;
+//         return "HTTP/1.1 204 No Content\r\nConnection: keep-alive\r\n\r\n";
+//     } else
+//     {
+//         return "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+//     }
+// }
+
+// std::string handlePost(const HttpRequest& req, const RouteResult& route)
+// {
+//     if (!route.isAllowed)
+//     {
+//         return "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+//     }
+//     if (req.getBody().length() > route.location.maxBodySize)
+//     {
+//         return "HTTP/1.1 413 Payload Too Large\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+//     }
+//     std::string targetPath = route.finalPath;
+//     struct stat s;
+//     if (stat(targetPath.c_str(), &s) == 0 && S_ISDIR(s.st_mode))
+//     {
+//         if (targetPath[targetPath.length() - 1] != '/')
+//         {
+//             targetPath += "/";
+//         }
+//         std::ostringstream filename;
+//         filename << "upload_" << time(NULL) << ".bin";
+//         targetPath += filename.str();
+//     }
+//     std::ofstream outFile(targetPath.c_str(), std::ios::binary);
+//     if (!outFile.is_open())
+//     {
+//         std::cerr << "[POST] Error: Could not open " << targetPath << " for writing. Check folder permissions." << std::endl;
+//         return "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+//     }
+//     outFile.write(req.getBody().data(), req.getBody().length());
+//     outFile.close();
+//     std::cout << "[POST] Successfully created file: " << targetPath << " (" << req.getBody().length() << " bytes)" << std::endl;
+//     return "HTTP/1.1 201 Created\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+// }
