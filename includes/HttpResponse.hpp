@@ -37,10 +37,11 @@ class HttpResponse : public HttpRequest, public Router {
         void setResponseHeaders(std::string path);
         void Status_file(const RouteResult& routeResult);
         void send_small_files(const RouteResult& routeResult, const std::string& autoIndexContent);
-        void set_body(std::string& response, const std::string& path);
+        void set_body(const std::string& path);
         void write_response();
         void set_directory_autoindex(const std::string& autoIndexContent);
         int check_favIco(const RouteResult& routeResult);
+        void send_large_file(const RouteResult& routeResult);
 };
 
 #endif

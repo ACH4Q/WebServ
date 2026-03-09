@@ -135,7 +135,7 @@ void HttpResponse::Status_file(const RouteResult& routeResult)
     }
 }
 
-void HttpResponse::set_body(std::string& response, const std::string& path)
+void HttpResponse::set_body(const std::string& path)
 {
     int fd = open(path.c_str(), O_RDONLY);
     char buffer[4096];
@@ -145,7 +145,6 @@ void HttpResponse::set_body(std::string& response, const std::string& path)
     std::ostringstream oss;
     oss << response_body.size();
     content_length = oss.str();
-    response += "Content-Length: " + content_length + "\r\n";
     close(fd);
 }
 
@@ -178,7 +177,7 @@ void HttpResponse::send_small_files(const RouteResult& routeResult, const std::s
     else
     {
         setResponseHeaders(routeResult.finalPath);
-        set_body(response_body, routeResult.finalPath);
+        set_body(routeResult.finalPath);
         write_response();
     }
 }
@@ -193,6 +192,33 @@ int HttpResponse::check_favIco(const RouteResult& routeResult)
                 return 1;
         }
     return 0;
+}
+
+void HttpResponse::send_large_file(const RouteResult& routeResult)
+{
+    std::cout << "[Response] Sending large file: " << routeResult.finalPath << " (" << fileSize << " bytes)" << std::endl;
+    int fd = open(routeResult.finalPath.c_str(), O_RDONLY);
+    setStatusLine();
+    setResponseHeaders(routeResult.finalPath);
+    std::string headerResponse = status_line;
+    for (std::map<std::string, std::string>::const_iterator it = response_headers.begin(); it != response_headers.end(); ++it)
+        headerResponse += it->first + ": " + it->second + "\r\n";
+    headerResponse += "\r\n";
+    send(_clientFd, headerResponse.c_str(), headerResponse.size(), 0);
+    char buffer[8192];
+    ssize_t bytesRead;
+    while ((bytesRead = read(fd, buffer, sizeof(buffer))) > 0) {
+        ssize_t totalSent = 0;
+        while (totalSent < bytesRead) {
+            ssize_t sent = send(_clientFd, buffer + totalSent, bytesRead - totalSent, 0);
+            if (sent == -1) {
+                close(fd);
+                return;
+            }
+            totalSent += sent;
+        }
+    }
+    close(fd);
 }
 
 void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeResult, int clientFd, const std::string& autoIndexContent)
@@ -210,7 +236,8 @@ void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeRe
             if (fileSize < 1024 *1024)
                 send_small_files(routeResult, autoIndexContent);
             else {
-                std::cout << "[Response] File is larger than 1MB, sending with sendfile..." << std::endl;
+                std::cout << "[Response] Large file detected (" << fileSize << " bytes), using sendfile for efficient transfer." << std::endl;
+                send_large_file(routeResult);
             }
         }
     }
