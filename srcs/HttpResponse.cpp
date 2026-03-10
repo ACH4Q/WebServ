@@ -36,7 +36,7 @@ bool HttpResponse::continueLargeTransfer(int clientFd)
                             transfer.header.size() - transfer.headerSent, 0);
         if (sent > 0)
             transfer.headerSent += static_cast<size_t>(sent);
-        else if (sent == -1 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
+        else if (sent == -1)
             return false;
         else
         {
@@ -57,7 +57,7 @@ bool HttpResponse::continueLargeTransfer(int clientFd)
         }
         else if (bytesRead == 0)
             transfer.eof = true;
-        else if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+        else if (bytesRead == -1)
             return false;
         else
         {
@@ -73,7 +73,7 @@ bool HttpResponse::continueLargeTransfer(int clientFd)
                             transfer.bufferLen - transfer.bufferSent, 0);
         if (sent > 0)
             transfer.bufferSent += sent;
-        else if (sent == -1 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
+        else if (sent == -1)
             return false;
         else
         {
