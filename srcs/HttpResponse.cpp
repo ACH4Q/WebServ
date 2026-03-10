@@ -27,11 +27,11 @@ int HttpResponse::check_status_fourhundred(const HttpRequest& req, const RouteRe
         errorOccurred = true;
         return 404;
     }
-    if (req.getMethod() == "POST" && req.getBody().length() > routeResult.location.maxBodySize)
-    {
-        errorOccurred = true;
-        return 413;
-    }
+    // if (req.getMethod() == "POST" && req.getBody().length() > routeResult.location.maxBodySize)
+    // {
+    //     errorOccurred = true;
+    //     return 413;
+    // }
     return 0;
 }
 
@@ -282,20 +282,36 @@ std::string getExtensionFromContentType(const std::string& contentType)
 std::string handleDelete(const HttpRequest& req, const RouteResult& route)
 {
     if (!route.isAllowed)
+    {
         return "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+    }
+    
     if (req.getPath().find("../") != std::string::npos)
+    {
         return "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+    }
+    
     if (route.isDirectory)
+    {
         return "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+    }
+    
     if (access(route.finalPath.c_str(), F_OK) != 0)
+    {
         return "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+    }
+    
     if (access(route.finalPath.c_str(), W_OK) != 0) 
+    {
         return "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+    }
+    
     if (std::remove(route.finalPath.c_str()) == 0)
     {
         std::cout << "[DELETE] Successfully removed: " << route.finalPath << std::endl;
         return "HTTP/1.1 204 No Content\r\nConnection: keep-alive\r\n\r\n";
-    } else
+    } 
+    else
     {
         return "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
     }
@@ -304,14 +320,31 @@ std::string handleDelete(const HttpRequest& req, const RouteResult& route)
 std::string handlePost(const HttpRequest& req, const RouteResult& route)
 {
     if (!route.isAllowed)
+    {
         return "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
-    if (req.getBody().length() > route.location.maxBodySize)
+    }
+    if (req.getBodyFilename().empty())
+    {
+        return "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+    }
+    struct stat fileStat;
+    if (stat(req.getBodyFilename().c_str(), &fileStat) != 0)
+    {
+        return "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+    }
+
+    if ((size_t)fileStat.st_size > route.location.maxBodySize)
+    {
+        std::remove(req.getBodyFilename().c_str());
         return "HTTP/1.1 413 Payload Too Large\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+    }
     std::string targetPath = route.finalPath;
     struct stat s;
     bool isDir = (stat(targetPath.c_str(), &s) == 0 && S_ISDIR(s.st_mode));
     if (isDir && targetPath[targetPath.length() - 1] != '/')
+    {
         targetPath += "/";
+    }
     std::map<std::string, std::string>::const_iterator it = req.getHeaders().find("Content-Type");
     std::string contentType;
     if (it != req.getHeaders().end()) 
@@ -326,81 +359,117 @@ std::string handlePost(const HttpRequest& req, const RouteResult& route)
     if (isMultipart)
     {
         size_t bPos = contentType.find("boundary=");
-        if (bPos == std::string::npos) 
-            return "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
-        std::string boundary = "--" + contentType.substr(bPos + 9);
-        const std::string& body = req.getBody();
-        size_t start = body.find(boundary);
-        bool fileSaved = false;
-        while (start != std::string::npos)
+        if (bPos == std::string::npos)
         {
-            start += boundary.length();
-            if (start + 2 <= body.length() && body.substr(start, 2) == "--")
-                break; 
-            if (start + 2 <= body.length() && body.substr(start, 2) == "\r\n")
-                start += 2;
-            size_t end = body.find(boundary, start);
-            if (end == std::string::npos)
-                break;
-            size_t partEnd;
-            if (end >= 2 && body.substr(end - 2, 2) == "\r\n")
-                partEnd = end - 2;
-            else 
-                partEnd = end;
-            size_t headerEnd = body.find("\r\n\r\n", start);
-            if (headerEnd != std::string::npos && headerEnd < partEnd)
-            {
-                std::string headers = body.substr(start, headerEnd - start);
-                size_t dataStart = headerEnd + 4;
-                size_t dataLength = partEnd - dataStart;
-                size_t fnPos = headers.find("filename=\"");
-                if (fnPos != std::string::npos)
-                {
-                    fnPos += 10;
-                    size_t fnEnd = headers.find("\"", fnPos);
-                    std::string filename = headers.substr(fnPos, fnEnd - fnPos);
-                    if (!filename.empty())
-                    {
-                        std::string savePath;
-                        if (isDir) 
-                        {
-                            savePath = targetPath + filename;
-                        } 
-                        else 
-                        {
-                            savePath = targetPath;
-                        }
-                        std::ofstream outFile(savePath.c_str(), std::ios::binary);
-                        if (outFile.is_open())
-                        {
-                            outFile.write(body.data() + dataStart, dataLength);
-                            outFile.close();
-                            std::cout << "[MULTIPART] Saved: " << savePath << " (" << dataLength << " bytes)" << std::endl;
-                            fileSaved = true;
-                        }
-                    }
-                }
-            }
-            start = end;
+            return "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
         }
-        if (fileSaved)
-            return "HTTP/1.1 201 Created\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
-        else
+        std::string boundary = "--" + contentType.substr(bPos + 9);
+        std::ifstream inFile(req.getBodyFilename().c_str(), std::ios::binary);
+        
+        if (!inFile.is_open())
+        {
             return "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
-    }
+        }
+        size_t fileSize = fileStat.st_size;
+        size_t headSize = std::min((size_t)8192, fileSize);
+        char headBuf[8192];
+        inFile.read(headBuf, headSize);
+        std::string headStr(headBuf, headSize);
+        size_t startPos = headStr.find(boundary);
+        size_t headerEnd = headStr.find("\r\n\r\n", startPos);
+        if (startPos == std::string::npos || headerEnd == std::string::npos)
+        {
+            return "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+        }
+        size_t dataStart = headerEnd + 4;
+        std::string filename;
+        size_t fnPos = headStr.find("filename=\"", startPos);
+        if (fnPos != std::string::npos && fnPos < headerEnd)
+        {
+            fnPos += 10;
+            size_t fnEnd = headStr.find("\"", fnPos);
+            filename = headStr.substr(fnPos, fnEnd - fnPos);
+        }
 
+        if (filename.empty())
+        {
+            std::ostringstream tempName;
+            tempName << "upload_" << time(NULL) << ".bin";
+            filename = tempName.str();
+        }
+
+        std::string savePath;
+        if (isDir)
+        {
+            savePath = targetPath + filename;
+        }
+        else 
+        {
+            savePath = targetPath; 
+        }
+        size_t tailSize = std::min((size_t)8192, fileSize);
+        inFile.seekg(-tailSize, std::ios::end);
+        char tailBuf[8192];
+        inFile.read(tailBuf, tailSize);
+        std::string tailStr(tailBuf, tailSize);
+        size_t endBoundary = tailStr.rfind(boundary);
+        if (endBoundary == std::string::npos)
+        {
+            return "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+        }
+        size_t absoluteEndBoundary = fileSize - tailSize + endBoundary;
+        size_t dataEnd = absoluteEndBoundary;
+        
+        if (dataEnd >= 2) 
+        {
+            dataEnd -= 2;
+        }
+        if (dataEnd < dataStart)
+        {
+            return "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+        }
+        size_t dataLength = dataEnd - dataStart;
+        std::ofstream outFile(savePath.c_str(), std::ios::binary);
+        if (!outFile.is_open())
+        {
+            return "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+        }
+        inFile.seekg(dataStart, std::ios::beg);
+        char buffer[8192];
+        size_t bytesLeft = dataLength;
+        while (bytesLeft > 0)
+        {
+            size_t chunk = std::min((size_t)8192, bytesLeft);
+            inFile.read(buffer, chunk);
+            outFile.write(buffer, chunk);
+            bytesLeft -= chunk;
+        }
+        outFile.close();
+        inFile.close();
+        std::remove(req.getBodyFilename().c_str());
+        std::cout << "[MULTIPART] Saved: " << savePath << " (" << dataLength << " bytes)" << std::endl;
+        return "HTTP/1.1 201 Created\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+    }
+    std::string savePath;
+    
     if (isDir)
     {
         std::string ext = getExtensionFromContentType(contentType);
         std::ostringstream filename;
         filename << "upload_" << time(NULL) << ext;
-        targetPath += filename.str();
+        savePath = targetPath + filename.str();
     }
-    std::ofstream outFile(targetPath.c_str(), std::ios::binary);
-    if (!outFile.is_open())
+    else
+    {
+        savePath = targetPath;
+    }
+    if (std::rename(req.getBodyFilename().c_str(), savePath.c_str()) == 0)
+    {
+        std::cout << "[RAW POST] Moved to: " << savePath << " (" << fileStat.st_size << " bytes)" << std::endl;
+        return "HTTP/1.1 201 Created\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+    }
+    else
+    {
         return "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
-    outFile.write(req.getBody().data(), req.getBody().length());
-    outFile.close();
-    std::cout << "[RAW POST] Saved: " << targetPath << " (" << req.getBody().length() << " bytes)" << std::endl;
-    return "HTTP/1.1 201 Created\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
+    }
 }

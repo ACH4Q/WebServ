@@ -64,7 +64,7 @@ void Event::run(SocketManager& manager, EpollManager& epollManager) {
                         std::cout << "Successfully parsed request: "
                                   << requests[fd].getMethod() << " "
                                   << requests[fd].getPath() << " "
-                                  << requests[fd].getBody() << " "
+                                  << requests[fd].getBodyFilename() << " "
                                   << requests[fd].getVersion()
                                   << std::endl;
                         Router routeResult;

@@ -4,39 +4,42 @@
 #include <map>
 #include <string>
 #include <vector>
-#include <fstream>
 
 enum RequestParseState
 {
-    Request_Line,      // GET /index.html HTTP/1.1
-    Request_Headers,   // Host: localhost...
-    Request_Body,      // Standard body based on Content-Length
-    Request_Chunked,   // Chunked data
-    Request_Finished,  // ready for response
-    Request_Error
+    Request_Line,      
+    Request_Headers,   
+    Request_Body,      
+    Request_Chunked,   
+    Request_Finished,  
+    Request_Error      
 };
 
 class HttpRequest
 {
     protected:
-        std::string                         method;  // GET, POST, or DELETE 
-        std::string                         path;    // Requested URI
-        std::string                         version; // HTTP protocol version
-        std::map<std::string, std::string>  headers;
-        std::string                         bodyFilename; // Path to the temporary file
-        std::ofstream                       bodyFile;     // pipeline
+        std::string                         method; 
+        std::string                         path;    
+        std::string                         version; 
+        std::map<std::string, std::string>  headers; 
+        std::string                         bodyFilename; 
+        int                                 bodyFd;
+        size_t                              bodyBytesWritten;
         RequestParseState                   state;
         size_t                              contentLength;
         std::string                         storage;
         int                                 errorCode;
+
         bool    parseRequestLine(std::string &line);
         void    parseHeaders(std::string &line);
         void    parseBody();
         void    processChunk(std::string &storage);
-        void    openTempFile();
+        void    openTempFile(); 
+
     public:
         HttpRequest();
         ~HttpRequest();
+
         void    parse(std::string &rawBuffer);
         void    reset();
         const std::string&                  getMethod() const;
