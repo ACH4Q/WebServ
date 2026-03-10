@@ -53,6 +53,18 @@ void Event::run(SocketManager& manager, EpollManager& epollManager) {
             }
             else
             {
+                if (HttpResponse::hasPendingLargeTransfer(fd))
+                {
+                    bool done = HttpResponse::continueLargeTransfer(fd);
+                    if (done)
+                    {
+                        epollManager.ctrl(fd, 0, EPOLL_CTL_DEL);
+                        close(fd);
+                        requests.erase(fd);
+                        clientServerIndex.erase(fd);
+                    }
+                    continue;
+                }
                 char buffer[4096];
                 int bytesRead = recv(fd, buffer, sizeof(buffer), 0);
                 if (bytesRead > 0)
@@ -74,10 +86,18 @@ void Event::run(SocketManager& manager, EpollManager& epollManager) {
                         std::string autoIndexContent = autoIndex.generate(result.finalPath, requests[fd].getPath());
                         HttpResponse response;
                         response.generateResponse(requests[fd], result, fd, autoIndexContent);
-                        epollManager.ctrl(fd, 0, EPOLL_CTL_DEL);
-                        close(fd);
-                        requests.erase(fd);
-                        clientServerIndex.erase(fd);
+                        if (HttpResponse::hasPendingLargeTransfer(fd))
+                        {
+                            epollManager.ctrl(fd, EPOLLOUT, EPOLL_CTL_MOD);
+                            requests.erase(fd);
+                        }
+                        else
+                        {
+                            epollManager.ctrl(fd, 0, EPOLL_CTL_DEL);
+                            close(fd);
+                            requests.erase(fd);
+                            clientServerIndex.erase(fd);
+                        }
                     }
                 }
                 else

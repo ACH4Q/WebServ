@@ -11,6 +11,88 @@
 #include <ctime>
 #include <sys/socket.h>
 
+std::map<int, LargeFileTransfer> HttpResponse::_pendingLargeTransfers;
+
+LargeFileTransfer::LargeFileTransfer() : fileFd(-1), headerSent(0), bufferLen(0), bufferSent(0), eof(false) {}
+
+#include <cerrno>
+
+bool HttpResponse::hasPendingLargeTransfer(int clientFd)
+{
+    return _pendingLargeTransfers.find(clientFd) != _pendingLargeTransfers.end();
+}
+
+bool HttpResponse::continueLargeTransfer(int clientFd)
+{
+    std::map<int, LargeFileTransfer>::iterator it = _pendingLargeTransfers.find(clientFd);
+    if (it == _pendingLargeTransfers.end())
+        return true;
+
+    LargeFileTransfer &transfer = it->second;
+
+    if (transfer.headerSent < transfer.header.size())
+    {
+        ssize_t sent = send(clientFd, transfer.header.c_str() + transfer.headerSent,
+                            transfer.header.size() - transfer.headerSent, 0);
+        if (sent > 0)
+            transfer.headerSent += static_cast<size_t>(sent);
+        else if (sent == -1 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
+            return false;
+        else
+        {
+            close(transfer.fileFd);
+            _pendingLargeTransfers.erase(it);
+            return true;
+        }
+        return false;
+    }
+
+    if (transfer.bufferSent >= transfer.bufferLen && !transfer.eof)
+    {
+        ssize_t bytesRead = read(transfer.fileFd, transfer.buffer, sizeof(transfer.buffer));
+        if (bytesRead > 0)
+        {
+            transfer.bufferLen = bytesRead;
+            transfer.bufferSent = 0;
+        }
+        else if (bytesRead == 0)
+            transfer.eof = true;
+        else if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+            return false;
+        else
+        {
+            close(transfer.fileFd);
+            _pendingLargeTransfers.erase(it);
+            return true;
+        }
+    }
+
+    if (transfer.bufferSent < transfer.bufferLen)
+    {
+        ssize_t sent = send(clientFd, transfer.buffer + transfer.bufferSent,
+                            transfer.bufferLen - transfer.bufferSent, 0);
+        if (sent > 0)
+            transfer.bufferSent += sent;
+        else if (sent == -1 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
+            return false;
+        else
+        {
+            close(transfer.fileFd);
+            _pendingLargeTransfers.erase(it);
+            return true;
+        }
+    }
+
+    if (transfer.eof && transfer.bufferSent >= transfer.bufferLen)
+    {
+        close(transfer.fileFd);
+        _pendingLargeTransfers.erase(it);
+        return true;
+    }
+
+    return false;
+}
+
 int HttpResponse::check_status_fourhundred(const HttpRequest& req, const RouteResult& routeResult)
 {
     if (!routeResult.isAllowed){
@@ -199,28 +281,20 @@ void HttpResponse::send_large_file(const RouteResult& routeResult)
 {
     std::cout << "[Response] Sending large file: " << routeResult.finalPath << " (" << fileSize << " bytes)" << std::endl;
     int fd = open(routeResult.finalPath.c_str(), O_RDONLY);
+    if (fd == -1)
+        return;
     setStatusLine();
     setResponseHeaders(routeResult.finalPath);
     std::string headerResponse = status_line;
     for (std::map<std::string, std::string>::const_iterator it = response_headers.begin(); it != response_headers.end(); ++it)
         headerResponse += it->first + ": " + it->second + "\r\n";
     headerResponse += "\r\n";
-    std::cout << "[Response] Sending headers:\n" << headerResponse << std::endl;
-    send(_clientFd, headerResponse.c_str(), headerResponse.size(), 0);
-    char buffer[8192];
-    ssize_t bytesRead;
-    while ((bytesRead = read(fd, buffer, sizeof(buffer))) > 0) {
-        ssize_t totalSent = 0;
-        while (totalSent < bytesRead) {
-            ssize_t sent = send(_clientFd, buffer + totalSent, bytesRead - totalSent, 0);
-            if (sent == -1) {
-                close(fd);
-                return;
-            }
-            totalSent += sent;
-        }
-    }
-    close(fd);
+
+    LargeFileTransfer transfer;
+    transfer.fileFd = fd;
+    transfer.header = headerResponse;
+    _pendingLargeTransfers[_clientFd] = transfer;
+    continueLargeTransfer(_clientFd);
 }
 
 void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeResult, int clientFd, const std::string& autoIndexContent)
@@ -238,7 +312,7 @@ void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeRe
             if (fileSize < 1024 *1024)
                 send_small_files(routeResult, autoIndexContent);
             else {
-                std::cout << "[Response] Large file detected (" << fileSize << " bytes), using sendfile for efficient transfer." << std::endl;
+                std::cout << "[Response] Large file detected (" << fileSize << " bytes), streaming with send() chunks." << std::endl;
                 std::ostringstream oss;
                 oss << fileSize;
                 content_length = oss.str();
