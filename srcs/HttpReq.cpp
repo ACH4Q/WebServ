@@ -21,7 +21,7 @@ HttpRequest::~HttpRequest()
 void HttpRequest::openTempFile()
 {
     std::ostringstream ss;
-    ss << "./www/html/www/files/requests/req_" << this << "_" << time(NULL) << ".bin";
+    ss << "./www/html/www/files/uploads" << this << "_" << time(NULL) << ".bin";
     bodyFilename = ss.str();
     
     bodyFd = open(bodyFilename.c_str(), O_CREAT | O_WRONLY | O_APPEND, 0666);
