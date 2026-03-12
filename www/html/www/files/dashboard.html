@@ -12,6 +12,7 @@
             --primary: #89b4fa;
             --danger: #f38ba8;
             --success: #a6e3a1;
+            --warning: #f9e2af;
         }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -27,6 +28,7 @@
             gap: 20px;
             width: 100%;
             max-width: 800px;
+            margin-bottom: 20px;
         }
         .card {
             background: var(--surface);
@@ -56,11 +58,18 @@
         }
         .btn-post { background-color: var(--primary); color: #11111b; }
         .btn-post:hover { background-color: #74c7ec; }
+        
         .btn-delete { background-color: var(--danger); color: #11111b; }
         .btn-delete:hover { background-color: #eba0ac; }
+
+        .btn-cgi-get { background-color: var(--success); color: #11111b; margin-bottom: 10px; }
+        .btn-cgi-get:hover { background-color: #8bd5ca; }
+
+        .btn-cgi-post { background-color: var(--warning); color: #11111b; }
+        .btn-cgi-post:hover { background-color: #f2cdcd; }
         
         #console {
-            margin-top: 30px;
+            margin-top: 10px;
             width: 100%;
             max-width: 800px;
             background: #11111b;
@@ -69,6 +78,20 @@
             font-family: monospace;
             min-height: 100px;
         }
+        
+        #cgiOutput {
+            margin-top: 20px;
+            width: 100%;
+            background: #11111b;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            min-height: 100px;
+            box-sizing: border-box;
+            border: 1px solid #585b70;
+            overflow-x: auto;
+        }
+
         .log-success { color: var(--success); }
         .log-error { color: var(--danger); }
     </style>
@@ -95,6 +118,23 @@
         </div>
     </div>
 
+    <div class="container">
+        <div class="card" style="width: 100%;">
+            <h2>👨‍🍳 CGI Chef Testing Zone</h2>
+            <label>Send a message to the Python CGI Script:</label>
+            <input type="text" id="cgiInput" placeholder="Enter a secret message to send to Python...">
+            
+            <div style="display: flex; gap: 15px; margin-top: 10px;">
+                <button onclick="runCgi('GET')" class="btn-cgi-get">Test GET Request (Query String)</button>
+                <button onclick="runCgi('POST')" class="btn-cgi-post">Test POST Request (Stdin)</button>
+            </div>
+
+            <div id="cgiOutput">
+                <span style="color: #6c7086;"><em>CGI HTML Output will render here...</em></span>
+            </div>
+        </div>
+    </div>
+
     <div id="console">
         <span style="color: #6c7086;">Server logs will appear here...</span><br>
     </div>
@@ -111,18 +151,16 @@
 
         // --- HANDLE POST (UPLOAD) ---
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-            e.preventDefault(); // Stop page from refreshing
+            e.preventDefault(); 
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
 
             if (!file) return;
 
-            // This automatically builds the multipart/form-data boundary envelope!
             const formData = new FormData();
             formData.append('file', file);
 
             try {
-                // IMPORTANT: Change '/uploads' if your config uses a different path!
                 const response = await fetch('/uploads', {
                     method: 'POST',
                     body: formData
@@ -147,7 +185,6 @@
             }
 
             try {
-                // IMPORTANT: Change '/uploads/' if your config uses a different path!
                 const response = await fetch(`/uploads/${filename}`, {
                     method: 'DELETE'
                 });
@@ -165,6 +202,44 @@
                 log(`[Error] Could not connect to server.`, 'error');
             }
         });
+
+        // --- NEW: HANDLE CGI EXECUTION ---
+        async function runCgi(method) {
+            const outputBox = document.getElementById('cgiOutput');
+            const inputValue = document.getElementById('cgiInput').value || "No message provided";
+            
+            outputBox.innerHTML = "<span style='color: var(--primary);'><em>Cooking... Please wait...</em></span>";
+
+            // IMPORTANT: Change this URL if your test.py is located somewhere else!
+            // In your runCgi() function in dashboard.html:
+            let url = '/cgi-bin/test.py';
+            let fetchOptions = { method: method };
+
+            if (method === 'GET') {
+                url += '?message=' + encodeURIComponent(inputValue);
+            } 
+            else if (method === 'POST') {
+                fetchOptions.headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+                fetchOptions.body = 'message=' + encodeURIComponent(inputValue);
+            }
+
+            try {
+                const response = await fetch(url, fetchOptions);
+                const htmlText = await response.text();
+                
+                if (response.ok) {
+                    outputBox.innerHTML = htmlText;
+                    log(`[200 OK] CGI ${method} execution successful.`, 'success');
+                } else {
+                    outputBox.innerHTML = `<span style="color: var(--danger);">Server returned Error ${response.status}</span>`;
+                    log(`[${response.status}] CGI Script crashed or failed.`, 'error');
+                }
+            } 
+            catch (error) {
+                outputBox.innerHTML = `<span style="color: var(--danger);">Network Error: ${error}</span>`;
+                log(`[Error] CGI connection failed.`, 'error');
+            }
+        }
     </script>
 
 </body>

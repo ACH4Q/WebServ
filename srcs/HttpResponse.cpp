@@ -1,4 +1,5 @@
 #include "HttpResponse.hpp"
+#include "../includes/Cgi.hpp"
 #include "HttpReq.hpp"
 #include "Router.hpp"
 #include <string>
@@ -305,6 +306,11 @@ void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeRe
     if (!errorOccurred)
     {
         _clientFd = clientFd;
+    if ((req.getMethod() == "GET" || req.getMethod() == "POST") && (path.find(".php") != std::string::npos || path.find(".py") != std::string::npos))
+    {
+        handleCgi(req, routeResult);
+        return;
+    }
         if (req.getMethod() == "GET")
         {
             Status_file(routeResult);
@@ -556,4 +562,63 @@ std::string HttpResponse::handlePost(const HttpRequest& req, const RouteResult& 
     {
         return "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
     }
+}
+
+void HttpResponse::handleCgi(const HttpRequest& req, const RouteResult& routeResult)
+{
+    std::string interpreter;
+    if (routeResult.finalPath.find(".py") != std::string::npos)
+        interpreter = "/usr/bin/python3";
+    else if (routeResult.finalPath.find(".php") != std::string::npos)
+        interpreter = "/usr/bin/php-cgi";
+    else
+    {
+        status_code = 500;
+        setStatusLine();
+        write_response();
+        return;
+    }
+    CgiHandler cgi(interpreter, routeResult.finalPath);
+    std::string rawCgiOutput = cgi.executeCgi(req, routeResult);
+    if (rawCgiOutput.find("502 Bad Gateway") != std::string::npos || 
+        rawCgiOutput.find("500 Internal Server Error") != std::string::npos) 
+    {
+        std::string errorResponse = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        send(_clientFd, errorResponse.c_str(), errorResponse.length(), MSG_NOSIGNAL);
+        return;
+    }
+    size_t headerEnd = rawCgiOutput.find("\r\n\r\n");
+    if (headerEnd != std::string::npos)
+    {
+        std::string cgiHeaders = rawCgiOutput.substr(0, headerEnd);
+        response_body = rawCgiOutput.substr(headerEnd + 4);
+
+        size_t ctPos = cgiHeaders.find("Content-Type:");
+        if (ctPos == std::string::npos) ctPos = cgiHeaders.find("Content-type:"); 
+        
+        if (ctPos != std::string::npos) 
+        {
+            size_t lineEnd = cgiHeaders.find("\r\n", ctPos);
+            std::string ctLine = cgiHeaders.substr(ctPos, lineEnd - ctPos);
+            size_t colonPos = ctLine.find(":");
+            if (colonPos != std::string::npos) 
+            {
+                response_headers["Content-Type"] = ctLine.substr(colonPos + 2); 
+            }
+        }
+    }
+    else
+    {
+        response_body = rawCgiOutput;
+        response_headers["Content-Type"] = "text/html";
+    }
+    status_code = 200;
+    setStatusLine();
+    std::ostringstream oss;
+    oss << response_body.size();
+    content_length = oss.str();
+    response_headers["Content-Length"] = content_length;
+    response_headers["Connection"] = "close";
+    response_headers["Server"] = "webserv";
+    write_response();
 }

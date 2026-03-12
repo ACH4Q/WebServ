@@ -60,6 +60,7 @@ class HttpResponse : public HttpRequest, public Router {
         std::string handlePost(const HttpRequest& req, const RouteResult& route);
         std::string getExtensionFromContentType(const std::string& contentType);
         int check_status_fourhundred(const HttpRequest& req, const RouteResult& routeResult);
+        void handleCgi(const HttpRequest& req, const RouteResult& routeResult);
 };
 
 #endif
