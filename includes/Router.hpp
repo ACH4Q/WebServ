@@ -8,6 +8,8 @@
 struct RouteResult {
     bool        isAllowed;
     Location    location;
+    std::string serverRoot;
+    std::map<int, std::string> errorPages;
     std::string finalPath;
     bool        isDirectory; // HADA MACHI DABA
 };

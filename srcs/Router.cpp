@@ -1,6 +1,7 @@
 #include "../includes/Router.hpp"
 #include <sys/stat.h>
 #include <unistd.h>
+#include <iostream>
 
 Router::Router() {}
 Router::~Router() {}
@@ -42,6 +43,13 @@ RouteResult Router::resolve(const HttpRequest& req, const ServerConfig& config)
     RouteResult result;
     result.isAllowed = true;
     result.isDirectory = false;
+    result.serverRoot = config.root;
+    // ── Root path ────────────────────────────────────────────────────────────
+    // config.root is the global server root from the config file.
+    // It is stored here in result.serverRoot so that any downstream
+    // consumer (e.g. HttpResponse) can resolve absolute paths without
+    // having access to the full ServerConfig object.
+    result.errorPages = config.errorPages;
     
     std::string uri = req.getPath();
     const Location* bestMatch = NULL;
@@ -77,19 +85,26 @@ RouteResult Router::resolve(const HttpRequest& req, const ServerConfig& config)
         if (!methodFound) result.isAllowed = false;
         std::string remainingUri = uri.substr(longestMatchLength);
 
+        // ── Final path ───────────────────────────────────────────────────────────
+        // result.finalPath is the fully resolved filesystem path that will be
+        // served (or written to) for this request.  It is computed in priority
+        // order: alias > location root > global server root.
         if (!bestMatch->alias.empty()) {
-            // ALIAS
+            // ALIAS: strip the location prefix and prepend the alias directory
             result.finalPath = joinPaths(bestMatch->alias, remainingUri);
         } else if (!bestMatch->root.empty()) {
-            // ROOT
+            // LOCATION ROOT: location has its own root, keep the full URI
+            result.serverRoot = bestMatch->root;
             result.finalPath = joinPaths(bestMatch->root, uri);
         } else {
-            // GLOBAL ROOT
+            // GLOBAL ROOT: fall back to the server-level root
             result.finalPath = joinPaths(config.root, uri);
         }
     } 
     else 
     {
+        // No location block matched → resolve directly under the global server root.
+        // result.finalPath ends up as:  <config.root>/<request URI>
         result.finalPath = joinPaths(config.root, uri);
     }
 

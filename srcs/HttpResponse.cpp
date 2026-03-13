@@ -11,6 +11,8 @@
 #include <fstream>
 #include <ctime>
 #include <sys/socket.h>
+#include <cerrno>
+#include <cstring>
 
 std::map<int, LargeFileTransfer> HttpResponse::_pendingLargeTransfers;
 
@@ -238,6 +240,7 @@ void HttpResponse::write_response()
         finalResponse += it->first + ": " + it->second + "\r\n";
     finalResponse += "\r\n" + response_body;
     send(_clientFd, finalResponse.c_str(), finalResponse.size(), MSG_NOSIGNAL);
+    std::cout << "[Response] Sent response: " << finalResponse << std::endl;
 }
 
 void HttpResponse::set_directory_autoindex( const std::string& autoIndexContent){
@@ -300,17 +303,17 @@ void HttpResponse::send_large_file(const RouteResult& routeResult)
 
 void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeResult, int clientFd, const std::string& autoIndexContent)
 {
+    _clientFd = clientFd;
     if (check_favIco(routeResult))
         return;
     check_error(req, routeResult);
     if (!errorOccurred)
     {
-        _clientFd = clientFd;
-    if ((req.getMethod() == "GET" || req.getMethod() == "POST") && (path.find(".php") != std::string::npos || path.find(".py") != std::string::npos))
-    {
-        handleCgi(req, routeResult);
-        return;
-    }
+        if ((req.getMethod() == "GET" || req.getMethod() == "POST") && (path.find(".php") != std::string::npos || path.find(".py") != std::string::npos))
+        {
+            handleCgi(req, routeResult);
+            return;
+        }
         if (req.getMethod() == "GET")
         {
             Status_file(routeResult);
@@ -327,6 +330,7 @@ void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeRe
         }
         else if (req.getMethod() == "POST")
         {
+            std::cout << "[Response] Handling POST request for: " << routeResult.finalPath << std::endl;
             std::string postResponse = handlePost(req, routeResult);
             send(_clientFd, postResponse.c_str(), postResponse.size(), MSG_NOSIGNAL);
         }
@@ -335,12 +339,22 @@ void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeRe
             std::string deleteResponse = handleDelete(req, routeResult);
             send(_clientFd, deleteResponse.c_str(), deleteResponse.size(), MSG_NOSIGNAL);
         }
-    }
-    else
-    {
-        //here i'll implement error responses for 400, 403, 404, 405, 413
-        std::cout << "[Response] Error occurred, status code: " << status_code << std::endl;
-    }
+        }
+        else
+        {
+            // Issue: this branch depends on routeResult.serverRoot and _clientFd,
+            // but _clientFd is only assigned in the success path above and
+            // serverRoot can be wrong or empty depending on routing. When that
+            // happens, set_body() reads the wrong file path and the browser gets
+            // no real error page content back.
+            std::string errorPagePath = routeResult.errorPages[status_code];
+            std::string error_final_path = routeResult.serverRoot + errorPagePath;
+            setStatusLine();
+            set_body(error_final_path);
+            setResponseHeaders(error_final_path);
+            write_response();
+            return;
+        }
 }
 
 std::string HttpResponse::getExtensionFromContentType(const std::string& contentType)
