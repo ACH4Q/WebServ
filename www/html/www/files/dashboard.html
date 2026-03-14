@@ -3,17 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebServ | Control Panel</title>
+    <title>1337 WebServ Dashboard</title>
     <style>
+        /* --- GLOBAL THEME (Catppuccin Dark Vibe) --- */
         :root {
-            --bg: #1e1e2e;
-            --surface: #313244;
+            --bg: #0d0d12;
+            --surface: #1e1e2e;
             --text: #cdd6f4;
             --primary: #89b4fa;
-            --danger: #f38ba8;
+            --secondary: #cba6f7;
             --success: #a6e3a1;
+            --danger: #f38ba8;
             --warning: #f9e2af;
+            --hover: #313244;
+            --terminal: #11111b;
         }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: var(--bg);
@@ -21,226 +26,400 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 50px;
+            padding: 40px;
+            margin: 0;
         }
-        .container {
-            display: flex;
-            gap: 20px;
+
+        h1 {
+            color: var(--primary);
+            text-shadow: 0 0 10px rgba(137, 180, 250, 0.3);
+            margin-bottom: 40px;
+            font-size: 36px;
+        }
+
+        /* --- LAYOUT GRID --- */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* 2 columns for a better layout */
+            gap: 30px;
             width: 100%;
-            max-width: 800px;
-            margin-bottom: 20px;
+            max-width: 1200px;
         }
+
+        @media (max-width: 900px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+        }
+
+        /* --- CARD STYLE --- */
         .card {
             background: var(--surface);
-            padding: 25px;
             border-radius: 12px;
-            flex: 1;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid var(--hover);
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
         }
-        h2 { margin-top: 0; border-bottom: 2px solid var(--primary); padding-bottom: 10px; }
-        input[type="file"], input[type="text"] {
-            width: 90%;
-            padding: 10px;
-            margin: 15px 0;
-            background: var(--bg);
-            border: 1px solid #585b70;
-            color: var(--text);
-            border-radius: 6px;
+
+        .card-header {
+            border-bottom: 1px solid var(--hover);
+            padding-bottom: 15px;
+            margin-bottom: 15px;
         }
-        button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            font-weight: bold;
+
+        .card-header h2 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .subtitle {
+            color: #6c7086;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        /* --- CGI EXPLORER LIST --- */
+        .file-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 20px 0;
+            border: 1px solid var(--hover);
+            border-radius: 8px;
+            background: var(--terminal);
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--hover);
             cursor: pointer;
             transition: 0.2s;
-            width: 100%;
         }
-        .btn-post { background-color: var(--primary); color: #11111b; }
-        .btn-post:hover { background-color: #74c7ec; }
-        
-        .btn-delete { background-color: var(--danger); color: #11111b; }
-        .btn-delete:hover { background-color: #eba0ac; }
 
-        .btn-cgi-get { background-color: var(--success); color: #11111b; margin-bottom: 10px; }
-        .btn-cgi-get:hover { background-color: #8bd5ca; }
+        .file-item:last-child { border-bottom: none; }
+        .file-item:hover { background: var(--hover); padding-left: 30px; }
+        .file-name { font-weight: bold; display: flex; align-items: center; gap: 10px;}
+        .file-meta { color: #6c7086; font-size: 14px; }
 
-        .btn-cgi-post { background-color: var(--warning); color: #11111b; }
-        .btn-cgi-post:hover { background-color: #f2cdcd; }
-        
-        #console {
-            margin-top: 10px;
-            width: 100%;
-            max-width: 800px;
-            background: #11111b;
-            padding: 15px;
+        /* --- TERMINAL BOXES --- */
+        .terminal {
+            background: var(--terminal);
             border-radius: 8px;
-            font-family: monospace;
-            min-height: 100px;
+            border: 1px solid var(--hover);
+            overflow: hidden;
+            flex-grow: 1; /* Pushes terminal to fill space */
         }
-        
-        #cgiOutput {
-            margin-top: 20px;
-            width: 100%;
-            background: #11111b;
-            padding: 15px;
-            border-radius: 8px;
+
+        .terminal-header {
+            background: #181825;
+            padding: 8px 15px;
+            font-size: 12px;
+            color: #a6adc8;
             font-family: monospace;
-            min-height: 100px;
-            box-sizing: border-box;
-            border: 1px solid #585b70;
+            border-bottom: 1px solid var(--hover);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .terminal-body {
+            padding: 20px;
+            min-height: 120px;
+            font-family: monospace;
+            color: var(--success);
+            white-space: pre-wrap;
             overflow-x: auto;
         }
 
-        .log-success { color: var(--success); }
-        .log-error { color: var(--danger); }
+        /* --- INPUTS & BUTTONS --- */
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+
+        input[type="text"], input[type="file"] {
+            flex-grow: 1;
+            padding: 12px;
+            background: var(--terminal);
+            color: var(--text);
+            border: 1px solid var(--hover);
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 14px;
+            outline: none;
+        }
+        
+        input[type="text"]:focus {
+            border-color: var(--primary);
+        }
+
+        button {
+            padding: 12px 20px;
+            color: var(--terminal);
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+
+        button:hover { filter: brightness(1.2); transform: translateY(-2px); }
     </style>
 </head>
 <body>
 
-    <h1>🚀 WebServ Dashboard</h1>
+    <h1>🌐 1337 WebServ Dashboard</h1>
 
-    <div class="container">
-        <div class="card">
-            <h2>Upload File (POST)</h2>
-            <form id="uploadForm">
-                <label>Select any file to stream to the server:</label>
-                <input type="file" id="fileInput" required>
-                <button type="submit" class="btn-post">Upload File</button>
-            </form>
-        </div>
+    <div class="dashboard-grid">
 
         <div class="card">
-            <h2>Remove File (DELETE)</h2>
-            <label>Type the exact filename to delete:</label>
-            <input type="text" id="deleteInput" placeholder="e.g., video.mp4" required>
-            <button id="deleteBtn" class="btn-delete">Delete File</button>
-        </div>
-    </div>
-
-    <div class="container">
-        <div class="card" style="width: 100%;">
-            <h2>👨‍🍳 CGI Chef Testing Zone</h2>
-            <label>Send a message to the Python CGI Script:</label>
-            <input type="text" id="cgiInput" placeholder="Enter a secret message to send to Python...">
+            <div class="card-header">
+                <h2 style="color: var(--primary);">📂 CGI GET Tests (/cgi-bin/)</h2>
+                <div class="subtitle">Execute scripts via GET request</div>
+            </div>
             
-            <div style="display: flex; gap: 15px; margin-top: 10px;">
-                <button onclick="runCgi('GET')" class="btn-cgi-get">Test GET Request (Query String)</button>
-                <button onclick="runCgi('POST')" class="btn-cgi-post">Test POST Request (Stdin)</button>
-            </div>
+            <ul class="file-list">
+                <li class="file-item" onclick="executeCgi('test.py?user=pixel-peeper')">
+                    <span class="file-name">🐍 test.py (Python)</span>
+                    <span class="file-meta">GET Test</span>
+                </li>
+                <li class="file-item" onclick="executeCgi('test.php?user=mastermind')">
+                    <span class="file-name">🐘 test.php (PHP)</span>
+                    <span class="file-meta">GET Test</span>
+                </li>
+            </ul>
 
-            <div id="cgiOutput">
-                <span style="color: #6c7086;"><em>CGI HTML Output will render here...</em></span>
+            <div class="terminal">
+                <div class="terminal-header">
+                    <span id="term-title">Waiting...</span>
+                    <span id="term-status">Idle</span>
+                </div>
+                <div class="terminal-body" id="term-output">
+                    <span style="color: #6c7086;">> Click a script above...</span>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div id="console">
-        <span style="color: #6c7086;">Server logs will appear here...</span><br>
+        <div class="card">
+            <div class="card-header">
+                <h2 style="color: var(--secondary);">📮 CGI POST Tests (/cgi-bin/)</h2>
+                <div class="subtitle">Pipe data into Python's stdin</div>
+            </div>
+            
+            <div class="input-group">
+                <input type="text" id="cgi-post-param" placeholder="Type a message...">
+                <button onclick="fireCgiPost()" style="background: var(--secondary);">Fire POST</button>
+            </div>
+
+            <div class="terminal">
+                <div class="terminal-header">
+                    <span>Target: /cgi-bin/post_test.py</span>
+                    <span id="post-term-status">Idle</span>
+                </div>
+                <div class="terminal-body" id="post-term-output">
+                    <span style="color: #6c7086;">> Ready to send POST payload...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2 style="color: var(--success);">📁 Normal POST (Upload)</h2>
+                <div class="subtitle">Uploads a file to the /uploads directory</div>
+            </div>
+            
+            <div class="input-group">
+                <input type="file" id="normal-upload-file">
+                <button onclick="fireNormalPost()" style="background: var(--success);">Upload File</button>
+            </div>
+
+            <div class="terminal">
+                <div class="terminal-header">
+                    <span>Target: /uploads</span>
+                    <span id="upload-term-status">Idle</span>
+                </div>
+                <div class="terminal-body" id="upload-term-output">
+                    <span style="color: #6c7086;">> Select a file to test POST...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2 style="color: var(--danger);">🗑️ Normal DELETE (Remove)</h2>
+                <div class="subtitle">Deletes a specific file from /uploads</div>
+            </div>
+            
+            <div class="input-group">
+                <input type="text" id="delete-filename" placeholder="Filename (e.g., test.jpg)">
+                <button onclick="fireNormalDelete()" style="background: var(--danger);">Delete File</button>
+            </div>
+
+            <div class="terminal">
+                <div class="terminal-header">
+                    <span>Target: /uploads/&lt;file&gt;</span>
+                    <span id="delete-term-status">Idle</span>
+                </div>
+                <div class="terminal-body" id="delete-term-output">
+                    <span style="color: #6c7086;">> Type a filename to test DELETE...</span>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script>
-        const terminal = document.getElementById('console');
+        // --- 1. GET Request Engine ---
+        async function executeCgi(filename) {
+            const outputBox = document.getElementById('term-output');
+            const termTitle = document.getElementById('term-title');
+            const termStatus = document.getElementById('term-status');
 
-        function log(message, type) {
-            const span = document.createElement('span');
-            span.className = type === 'success' ? 'log-success' : 'log-error';
-            span.innerText = `> ${message}\n`;
-            terminal.appendChild(span);
+            termTitle.innerText = `/cgi-bin/${filename}`;
+            termStatus.innerText = 'Executing...';
+            termStatus.style.color = 'var(--warning)';
+            outputBox.innerHTML = `<span style="color: var(--warning);">> Cooking ${filename}...</span>`;
+
+            try {
+                const response = await fetch(`/cgi-bin/${filename}`);
+                const result = await response.text();
+                if (response.ok) {
+                    termStatus.innerText = `[${response.status} OK]`;
+                    termStatus.style.color = 'var(--success)';
+                    outputBox.innerHTML = (result.includes('<html') || result.includes('<div')) ? result : result.replace(/\n/g, '<br>');
+                } else {
+                    termStatus.innerText = `[Error ${response.status}]`;
+                    termStatus.style.color = 'var(--danger)';
+                    outputBox.innerHTML = `<span style="color: var(--danger);">> Error Code: ${response.status}\n> Details: ${result}</span>`;
+                }
+            } catch (error) {
+                termStatus.innerText = '[Error]';
+                termStatus.style.color = 'var(--danger)';
+                outputBox.innerHTML = `<span style="color: var(--danger);">> ${error.message}</span>`;
+            }
         }
 
-        // --- HANDLE POST (UPLOAD) ---
-        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-            e.preventDefault(); 
-            const fileInput = document.getElementById('fileInput');
-            const file = fileInput.files[0];
+        // --- 2. CGI POST Engine ---
+        async function fireCgiPost() {
+            const paramValue = document.getElementById('cgi-post-param').value;
+            const outputBox = document.getElementById('post-term-output');
+            const termStatus = document.getElementById('post-term-status');
+            
+            if (!paramValue) {
+                outputBox.innerHTML = "<span style='color: var(--danger);'>> Error: Please type a message!</span>";
+                return;
+            }
 
-            if (!file) return;
+            termStatus.innerText = 'Sending...';
+            termStatus.style.color = 'var(--warning)';
+            outputBox.innerHTML = "<span style='color: var(--warning);'>> Piping data to Chef...</span>";
+            
+            try {
+                const response = await fetch('/cgi-bin/post_test.py', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'message=' + encodeURIComponent(paramValue) 
+                });
+                const result = await response.text();
+                if (response.ok) {
+                    termStatus.innerText = `[${response.status} OK]`;
+                    termStatus.style.color = 'var(--success)';
+                    outputBox.innerHTML = result; 
+                } else {
+                    termStatus.innerText = `[Error ${response.status}]`;
+                    termStatus.style.color = 'var(--danger)';
+                    outputBox.innerHTML = `<span style="color: var(--danger);">> Error Code: ${response.status}</span>`;
+                }
+            } catch (error) {
+                termStatus.innerText = '[Error]';
+                termStatus.style.color = 'var(--danger)';
+                outputBox.innerHTML = `<span style='color: var(--danger);'>> ${error.message}</span>`;
+            }
+        }
+
+        // --- 3. NORMAL POST Engine (Upload) ---
+        async function fireNormalPost() {
+            const fileInput = document.getElementById('normal-upload-file');
+            const outputBox = document.getElementById('upload-term-output');
+            const termStatus = document.getElementById('upload-term-status');
+
+            if (!fileInput.files.length) {
+                outputBox.innerHTML = "<span style='color: var(--danger);'>> Error: Select a file!</span>";
+                return;
+            }
 
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('upload_file', fileInput.files[0]);
+
+            termStatus.innerText = 'Uploading...';
+            termStatus.style.color = 'var(--warning)';
+            outputBox.innerHTML = "<span style='color: var(--warning);'>> Uploading...</span>";
 
             try {
                 const response = await fetch('/uploads', {
                     method: 'POST',
                     body: formData
                 });
-
+                const result = await response.text();
                 if (response.ok || response.status === 201) {
-                    log(`[201 Created] Successfully uploaded: ${file.name}`, 'success');
+                    termStatus.innerText = `[${response.status} Created]`;
+                    termStatus.style.color = 'var(--success)';
+                    outputBox.innerHTML = `<span style="color: var(--success);">> Upload successful!\n> Target: /uploads\n> Server Response: 201 Created</span>`;
                 } else {
-                    log(`[${response.status}] Upload failed: Server rejected the file.`, 'error');
+                    termStatus.innerText = `[Error ${response.status}]`;
+                    termStatus.style.color = 'var(--danger)';
+                    outputBox.innerHTML = `<span style="color: var(--danger);">> Upload failed. Code: ${response.status}</span>`;
                 }
-            } catch (err) {
-                log(`[Error] Could not connect to server.`, 'error');
+            } catch (error) {
+                termStatus.innerText = '[Error]';
+                termStatus.style.color = 'var(--danger)';
+                outputBox.innerHTML = `<span style='color: var(--danger);'>> ${error.message}</span>`;
             }
-        });
+        }
 
-        // --- HANDLE DELETE ---
-        document.getElementById('deleteBtn').addEventListener('click', async () => {
-            const filename = document.getElementById('deleteInput').value.trim();
+        // --- 4. NORMAL DELETE Engine ---
+        async function fireNormalDelete() {
+            const filename = document.getElementById('delete-filename').value;
+            const outputBox = document.getElementById('delete-term-output');
+            const termStatus = document.getElementById('delete-term-status');
+
             if (!filename) {
-                log(`[Warning] Please enter a filename.`, 'error');
+                outputBox.innerHTML = "<span style='color: var(--danger);'>> Error: Enter a filename!</span>";
                 return;
             }
+
+            termStatus.innerText = 'Deleting...';
+            termStatus.style.color = 'var(--warning)';
+            outputBox.innerHTML = `<span style='color: var(--warning);'>> Sending DELETE to /uploads/${filename}...</span>`;
 
             try {
                 const response = await fetch(`/uploads/${filename}`, {
                     method: 'DELETE'
                 });
-
-                if (response.ok || response.status === 204) {
-                    log(`[204 No Content] Successfully deleted: ${filename}`, 'success');
-                } else if (response.status === 404) {
-                    log(`[404 Not Found] File '${filename}' does not exist on server.`, 'error');
-                } else if (response.status === 403) {
-                    log(`[403 Forbidden] You do not have permission to delete this.`, 'error');
-                } else {
-                    log(`[${response.status}] Failed to delete file.`, 'error');
-                }
-            } catch (err) {
-                log(`[Error] Could not connect to server.`, 'error');
-            }
-        });
-
-        // --- NEW: HANDLE CGI EXECUTION ---
-        async function runCgi(method) {
-            const outputBox = document.getElementById('cgiOutput');
-            const inputValue = document.getElementById('cgiInput').value || "No message provided";
-            
-            outputBox.innerHTML = "<span style='color: var(--primary);'><em>Cooking... Please wait...</em></span>";
-
-            // IMPORTANT: Change this URL if your test.py is located somewhere else!
-            // In your runCgi() function in dashboard.html:
-            let url = '/cgi-bin/test.py';
-            let fetchOptions = { method: method };
-
-            if (method === 'GET') {
-                url += '?message=' + encodeURIComponent(inputValue);
-            } 
-            else if (method === 'POST') {
-                fetchOptions.headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-                fetchOptions.body = 'message=' + encodeURIComponent(inputValue);
-            }
-
-            try {
-                const response = await fetch(url, fetchOptions);
-                const htmlText = await response.text();
                 
-                if (response.ok) {
-                    outputBox.innerHTML = htmlText;
-                    log(`[200 OK] CGI ${method} execution successful.`, 'success');
+                const result = await response.text();
+                
+                // Your C++ code returns 204 No Content on success
+                if (response.ok || response.status === 204) {
+                    termStatus.innerText = `[${response.status} Deleted]`;
+                    termStatus.style.color = 'var(--success)';
+                    outputBox.innerHTML = `<span style="color: var(--success);">> Delete successful!\n> File: /uploads/${filename} removed.</span>`;
                 } else {
-                    outputBox.innerHTML = `<span style="color: var(--danger);">Server returned Error ${response.status}</span>`;
-                    log(`[${response.status}] CGI Script crashed or failed.`, 'error');
+                    termStatus.innerText = `[Error ${response.status}]`;
+                    termStatus.style.color = 'var(--danger)';
+                    outputBox.innerHTML = `<span style="color: var(--danger);">> Delete failed.\n> Status Code: ${response.status}\n> Make sure the file exists!</span>`;
                 }
-            } 
-            catch (error) {
-                outputBox.innerHTML = `<span style="color: var(--danger);">Network Error: ${error}</span>`;
-                log(`[Error] CGI connection failed.`, 'error');
+            } catch (error) {
+                termStatus.innerText = '[Network Error]';
+                termStatus.style.color = 'var(--danger)';
+                outputBox.innerHTML = `<span style='color: var(--danger);'>> Fatal Error: ${error.message}</span>`;
             }
         }
     </script>
-
 </body>
 </html>

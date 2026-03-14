@@ -116,17 +116,25 @@ int HttpResponse::check_status_fourhundred(const HttpRequest& req, const RouteRe
         errorOccurred = true;
         return 403;
     }
-    if (!routeResult.isDirectory && access(routeResult.finalPath.c_str(), F_OK) != 0 )
+    if (!routeResult.isDirectory)
     {
-        if (req.getMethod() != "POST") 
+        if (access(routeResult.finalPath.c_str(), F_OK) != 0) 
         {
-            errorOccurred = true;
-            return 404;
+            if (req.getMethod() != "POST" || 
+                routeResult.finalPath.find(".py") != std::string::npos || 
+                routeResult.finalPath.find(".php") != std::string::npos) 
+            {
+                errorOccurred = true;
+                return 404;
+            }
         }
-        if (!routeResult.isDirectory && access(routeResult.finalPath.c_str(), R_OK) != 0 )
+        else 
         {
-            errorOccurred = true;
-            return 403;
+            if (access(routeResult.finalPath.c_str(), R_OK) != 0) 
+            {
+                errorOccurred = true;
+                return 403;
+            }
         }
     }
     
@@ -330,6 +338,11 @@ void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeRe
     _clientFd = clientFd;
     response_headers.clear();
     response_body.clear();
+    size_t queryPos = routeResult.finalPath.find('?');
+    if (queryPos != std::string::npos)
+    {
+        routeResult.finalPath = routeResult.finalPath.substr(0, queryPos);
+    }
     std::string reqPath = req.getPath();
     std::string cleanPath = stripQueryString(reqPath);
     std::string sessionId = extractSessionId(req);
@@ -396,7 +409,7 @@ void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeRe
     check_error(req, routeResult);
     if (!errorOccurred)
     {
-        if ((req.getMethod() == "GET" || req.getMethod() == "POST") && (path.find(".php") != std::string::npos || path.find(".py") != std::string::npos))
+        if ((req.getMethod() == "GET" || req.getMethod() == "POST") && (routeResult.finalPath.find(".php") != std::string::npos || routeResult.finalPath.find(".py") != std::string::npos))
         {
             handleCgi(req, routeResult);
             return;
