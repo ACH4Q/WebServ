@@ -120,6 +120,12 @@ bool HttpResponse::continueLargeTransfer(int clientFd)
 
 int HttpResponse::check_status_fourhundred(const HttpRequest& req, const RouteResult& routeResult)
 {
+    if (req.getErrorCode() != 0)
+    {
+        errorOccurred = true;
+        std::cout << "hna 6 (Bad Request from Parser)" << std::endl;
+        return req.getErrorCode(); 
+    }
     if (!routeResult.isAllowed)
     {
         errorOccurred = true;
@@ -141,25 +147,18 @@ int HttpResponse::check_status_fourhundred(const HttpRequest& req, const RouteRe
                 routeResult.finalPath.find(".php") != std::string::npos) 
             {
                 errorOccurred = true;
-
                 std::cout << "hna 3" << std::endl;
                 return 404;
             }
         }
-        if (!routeResult.isAllowed)
-        {
-            std::cout << "hna 2" << std::endl;
-            errorOccurred = true;
-            return 405;
-        }
         else 
         {
-            // if (access(routeResult.finalPath.c_str(), R_OK) != 0) 
-            // {
-            //     std::cout << "hna 1" << std::endl;
-            //     errorOccurred = true;
-            //     return 403;
-            // }
+            if (access(routeResult.finalPath.c_str(), R_OK) != 0) 
+            {
+                 std::cout << "hna 1" << std::endl;
+                 errorOccurred = true;
+                 return 403;
+            }
         }
     }
     

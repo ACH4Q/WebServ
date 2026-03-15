@@ -41,23 +41,11 @@ bool Router::fileExists(const std::string& path)
 RouteResult Router::resolve(const HttpRequest& req, const ServerConfig& config)
 {
     RouteResult result;
-    // Route starts allowed by default; method checks may flip this later.
     result.isAllowed = true;
-    // Will be updated to true if resolved path is a directory.
     result.isDirectory = false;
-    // Default root for this request: server-level root from config.
     result.serverRoot = config.root;
-    // ── Root path ────────────────────────────────────────────────────────────
-    // config.root is the global server root from the config file.
-    // It is stored here in result.serverRoot so that any downstream
-    // consumer (e.g. HttpResponse) can resolve absolute paths without
-    // having access to the full ServerConfig object.
-    // Forward server error_page table so HttpResponse can pick error files.
     result.errorPages = config.errorPages;
-    
-    // Raw request URI path (may include query).
     std::string uri = req.getPath();
-    // Mark protected resources that require authenticated session.
     result.requires_login = (uri == "/dashboard" || uri.find("/dashboard/") == 0);
     const Location* bestMatch = NULL;
     size_t longestMatchLength = 0;
@@ -91,47 +79,43 @@ RouteResult Router::resolve(const HttpRequest& req, const ServerConfig& config)
         }
         if (!methodFound) result.isAllowed = false;
         std::string remainingUri = uri.substr(longestMatchLength);
-
-        // ── Final path ───────────────────────────────────────────────────────────
-        // result.finalPath is the fully resolved filesystem path that will be
-        // served (or written to) for this request.  It is computed in priority
-        // order: alias > location root > global server root.
-        if (!bestMatch->alias.empty()) {
-            // ALIAS: strip the location prefix and prepend the alias directory
+        if (!bestMatch->alias.empty())
+        {
             result.finalPath = joinPaths(bestMatch->alias, remainingUri);
-        } else if (!bestMatch->root.empty()) {
-            // LOCATION ROOT: location has its own root, keep the full URI
+        } else if (!bestMatch->root.empty())
+        {
             result.serverRoot = bestMatch->root;
             result.finalPath = joinPaths(bestMatch->root, uri);
-        } else {
-            // GLOBAL ROOT: fall back to the server-level root
+        } else
+        {
             result.finalPath = joinPaths(config.root, uri);
         }
     } 
     else 
     {
-        // No location block matched → resolve directly under the global server root.
-        // result.finalPath ends up as:  <config.root>/<request URI>
         result.finalPath = joinPaths(config.root, uri);
     }
-
     if (isDir(result.finalPath))
     {
         result.isDirectory = true;
-        if (result.finalPath[result.finalPath.length() - 1] != '/') {
+        if (result.finalPath[result.finalPath.length() - 1] != '/')
+        {
             result.finalPath += "/";
         }
-        std::string indexFile = "index.html";
-        if (bestMatch != NULL && !bestMatch->index.empty()) {
+        std::string indexFile = ""; 
+        if (bestMatch != NULL && !bestMatch->index.empty())
+        {
             indexFile = bestMatch->index;
         }
-        
-        std::string testPath = result.finalPath + indexFile;
-
-        if (fileExists(testPath))
+        if (!indexFile.empty()) 
         {
-            result.finalPath = testPath;
-            result.isDirectory = false;
+            std::string testPath = result.finalPath + indexFile;
+
+            if (fileExists(testPath))
+            {
+                result.finalPath = testPath;
+                result.isDirectory = false;
+            }
         }
     }
 

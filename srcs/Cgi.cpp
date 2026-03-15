@@ -159,7 +159,7 @@ std::string CgiHandler::executeCgi(const HttpRequest& req, const RouteResult& ro
         
         if (res == pid)
         {
-            break;
+            break; 
         } 
         else if (res == -1)
         {
@@ -172,9 +172,9 @@ std::string CgiHandler::executeCgi(const HttpRequest& req, const RouteResult& ro
             timedOut = true;
             break;
         }
-        usleep(10000); 
+        
+        usleep(10000);
     }
-
     freeEnvp();
     if (timedOut) 
     {
