@@ -1,8 +1,20 @@
 NAME        = webserv
-CC          = c++ -fsanitize=address
+CC          = c++ 
 FLAGS       = -Wall -Wextra -Werror -std=c++98
 INCLUDES    = -I includes/
-SRCS        = $(wildcard srcs/*.cpp)
+SRCS        = srcs/AutoIndex.cpp \
+	srcs/Cgi.cpp \
+	srcs/Client.cpp \
+	srcs/ConfigParser.cpp \
+	srcs/EpollManager.cpp \
+	srcs/Event.cpp \
+	srcs/HttpReq.cpp \
+	srcs/HttpResponse.cpp \
+	srcs/ListeningSocket.cpp \
+	srcs/main.cpp \
+	srcs/ManageServers.cpp \
+	srcs/Router.cpp \
+	srcs/SessionManager.cpp
 OBJS        = $(SRCS:.cpp=.o)
 
 all: $(NAME)
