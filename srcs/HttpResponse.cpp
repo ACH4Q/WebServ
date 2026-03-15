@@ -135,6 +135,7 @@ int HttpResponse::check_status_fourhundred(const HttpRequest& req, const RouteRe
     if (routeResult.isDirectory && req.getMethod() == "DELETE")
     {
         std::cout << "hna 4" << std::endl;
+        std::cout << "aji tchouf zebi kikber" << std::endl;
         errorOccurred = true;
         return 403;
     }
@@ -143,8 +144,7 @@ int HttpResponse::check_status_fourhundred(const HttpRequest& req, const RouteRe
         if (access(routeResult.finalPath.c_str(), F_OK) != 0) 
         {
             if (req.getMethod() != "POST" || 
-                routeResult.finalPath.find(".py") != std::string::npos || 
-                routeResult.finalPath.find(".php") != std::string::npos) 
+                routeResult.finalPath.find(".py") != std::string::npos || routeResult.finalPath.find(".php") != std::string::npos || routeResult.finalPath.find(".sh") != std::string::npos) 
             {
                 errorOccurred = true;
                 std::cout << "hna 3" << std::endl;
@@ -326,6 +326,7 @@ void HttpResponse::write_response()
         finalResponse += it->first + ": " + it->second + "\r\n";
     finalResponse += "\r\n" + response_body;
     send(_clientFd, finalResponse.c_str(), finalResponse.size(), MSG_NOSIGNAL);
+    std::cout << finalResponse << std::endl;
 }
 
 void HttpResponse::set_directory_autoindex( const std::string& autoIndexContent){
@@ -343,15 +344,26 @@ void HttpResponse::set_directory_autoindex( const std::string& autoIndexContent)
 
 void HttpResponse::send_small_files(const RouteResult& routeResult, const std::string& autoIndexContent)
 {
-    if (routeResult.isDirectory && routeResult.location.autoindex)
+    if (routeResult.isDirectory && routeResult.location.autoindex && access(routeResult.finalPath.c_str(), F_OK) == 0)
+    {
+        std::cout << "Serving autoindex for directory: " << routeResult.finalPath << std::endl;
         set_directory_autoindex(autoIndexContent);
+    }
     else if (routeResult.isDirectory && !routeResult.location.autoindex)
     {
+        std::cout << "Directory listing denied for: " << routeResult.finalPath << std::endl;
         sendErrorPage(routeResult, 403);
+        return;
+    }
+    else if (routeResult.isDirectory && access(routeResult.finalPath.c_str(), F_OK) != 0)
+    {
+        std::cout << "Directory not found: " << routeResult.finalPath << std::endl;
+        sendErrorPage(routeResult, 404);
         return;
     }
     else
     {
+        std::cout << "Serving file: " << routeResult.finalPath << " (" << fileSize << " bytes)" << std::endl;
         set_body(routeResult.finalPath);
         std::cout << "content length: " << content_length << std::endl;
         setResponseHeaders(routeResult.finalPath);
@@ -393,6 +405,7 @@ void HttpResponse::send_large_file(const RouteResult& routeResult)
 
 void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeResult, int clientFd, const std::string& autoIndexContent)
 {
+    std::cout << "lah lah rzaq lah" << std::endl;
     _clientFd = clientFd;
     response_headers.clear();
     response_body.clear();
@@ -467,7 +480,7 @@ void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeRe
     check_error(req, routeResult);
     if (!errorOccurred)
     {
-        if ((req.getMethod() == "GET" || req.getMethod() == "POST") && (routeResult.finalPath.find(".php") != std::string::npos || routeResult.finalPath.find(".py") != std::string::npos))
+        if ((req.getMethod() == "GET" || req.getMethod() == "POST") && (routeResult.finalPath.find(".php") != std::string::npos || routeResult.finalPath.find(".py") != std::string::npos || routeResult.finalPath.find(".sh") != std::string::npos))
         {
             handleCgi(req, routeResult);
             return;
@@ -516,6 +529,7 @@ void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeRe
         }
         else
         {
+            std::cout << "lah lah yal7assaniya"<< std::endl;
             sendErrorPage(routeResult, status_code);
             return;
         }
@@ -745,6 +759,8 @@ void HttpResponse::handleCgi(const HttpRequest& req, const RouteResult& routeRes
         cgiExec = "/usr/bin/python3";
     else if (routeResult.finalPath.find(".php") != std::string::npos)
         cgiExec = "/usr/bin/php-cgi";
+    else if (routeResult.finalPath.find(".sh") != std::string::npos)
+        cgiExec = "/bin/bash";
     else
     {
         std::string err = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
