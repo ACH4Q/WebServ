@@ -345,6 +345,11 @@ void HttpResponse::send_small_files(const RouteResult& routeResult, const std::s
 {
     if (routeResult.isDirectory && routeResult.location.autoindex)
         set_directory_autoindex(autoIndexContent);
+    else if (routeResult.isDirectory && !routeResult.location.autoindex)
+    {
+        sendErrorPage(routeResult, 403);
+        return;
+    }
     else
     {
         set_body(routeResult.finalPath);
