@@ -13,7 +13,10 @@ Event::Event() {}
 
 Event::~Event() {}
 
-void Event::run(SocketManager& manager, EpollManager& epollManager) {
+void Event::run(SocketManager& manager, EpollManager& epollManager)
+{
+    processCgiTasks(epollManager); 
+    std::vector<struct epoll_event> readyEvents = epollManager.wait(10);
     for (size_t i = 0; i < manager.getSockets().size(); ++i)
     {
         std::cout << "http://localhost:"
