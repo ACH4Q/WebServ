@@ -16,6 +16,9 @@
 #include <cstring>
 
 std::map<int, LargeFileTransfer> HttpResponse::_pendingLargeTransfers;
+
+HttpResponse::HttpResponse() : isCgi(false), cgiPid(-1) {}
+
 static void addHeaderToRawResponse(std::string& rawResponse, const std::string& key, const std::string& value)
 {
     size_t headerEnd = rawResponse.find("\r\n\r\n");
@@ -391,6 +394,9 @@ void HttpResponse::send_large_file(const RouteResult& routeResult)
 
 void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeResult, int clientFd, const std::string& autoIndexContent)
 {
+    this->isCgi = false;
+    this->cgiPid = -1;
+    this->cgiOutFilename = "";
     _clientFd = clientFd;
     response_headers.clear();
     response_body.clear();
@@ -403,6 +409,7 @@ void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeRe
     std::string cleanPath = stripQueryString(reqPath);
     std::string sessionId = extractSessionId(req);
     bool createdNewSession = false;
+    
     if (!isSessionValid(sessionId))
     {
         Session& session = createSession();
@@ -445,20 +452,18 @@ void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeRe
             return;
         }
     }
-
     if (routeResult.location.is_Redirect)
     {
         status_code = routeResult.location.returnCode;
         setStatusLine();
         content_length = "0";
         response_headers["Location"] = routeResult.location.returnPath;
-        response_headers["Conection"] = "close";
+        response_headers["Connection"] = "close"; // Fixed typo "Conection" here
         response_headers["Content-Length"] = content_length;
         response_headers["Server"] = "webserv";
         write_response();
         return;
     }
-
     if (check_favIco(routeResult))
         return;
     check_error(req, routeResult);
@@ -467,13 +472,13 @@ void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeRe
         if ((req.getMethod() == "GET" || req.getMethod() == "POST") && (routeResult.finalPath.find(".php") != std::string::npos || routeResult.finalPath.find(".py") != std::string::npos || routeResult.finalPath.find(".sh") != std::string::npos))
         {
             handleCgi(req, routeResult);
-            return;
+            return; 
         }
         if (req.getMethod() == "GET")
         {
             Status_file(routeResult);
             setStatusLine();
-            if (fileSize < 1024 *1024)
+            if (fileSize < 1024 * 1024)
                 send_small_files(routeResult, autoIndexContent);
             else {
                 std::ostringstream oss;
@@ -508,12 +513,12 @@ void HttpResponse::generateResponse(const HttpRequest& req, RouteResult& routeRe
                 addHeaderToRawResponse(deleteResponse, "Set-Cookie", "session_id=" + sessionId + "; Path=/");
             send(_clientFd, deleteResponse.c_str(), deleteResponse.size(), MSG_NOSIGNAL);
         }
-        }
-        else
-        {
-            sendErrorPage(routeResult, status_code);
-            return;
-        }
+    }
+    else
+    {
+        sendErrorPage(routeResult, status_code);
+        return;
+    }
 }
 
 std::string HttpResponse::getExtensionFromContentType(const std::string& contentType)
@@ -746,38 +751,13 @@ void HttpResponse::handleCgi(const HttpRequest& req, const RouteResult& routeRes
         return;
     }
     CgiHandler cgi(cgiExec, routeResult.finalPath);
-    std::string rawCgiOutput = cgi.executeCgi(req, routeResult);
-    if (rawCgiOutput.find("HTTP/1.1 50") == 0) 
+    this->cgiPid = cgi.executeCgi(req, routeResult, this->cgiOutFilename);
+    this->isCgi = true;
+    
+    if (this->cgiPid == -1) 
     {
-        send(_clientFd, rawCgiOutput.c_str(), rawCgiOutput.length(), 0);
-        return; 
+        std::string err = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        send(_clientFd, err.c_str(), err.length(), 0);
+        this->isCgi = false; // Mark as dead
     }
-    std::string headersPart;
-    std::string bodyPart;
-    size_t headerEnd = rawCgiOutput.find("\r\n\r\n");
-
-    if (headerEnd != std::string::npos) 
-    {
-        headersPart = rawCgiOutput.substr(0, headerEnd);
-        bodyPart = rawCgiOutput.substr(headerEnd + 4);
-    } 
-    else 
-    {
-        bodyPart = rawCgiOutput;
-    }
-    std::ostringstream finalResponse;
-    finalResponse << "HTTP/1.1 200 OK\r\n";
-    if (!headersPart.empty())
-    {
-        finalResponse << headersPart << "\r\n";
-    }
-    if (headersPart.find("Content-Type:") == std::string::npos)
-    {
-        finalResponse << "Content-Type: text/html\r\n";
-    }
-    finalResponse << "Content-Length: " << bodyPart.length() << "\r\n";
-    finalResponse << "\r\n"; 
-    finalResponse << bodyPart;
-    std::string responseStr = finalResponse.str();
-    send(_clientFd, responseStr.c_str(), responseStr.length(), 0);
 }

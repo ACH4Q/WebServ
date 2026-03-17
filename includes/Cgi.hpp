@@ -6,6 +6,8 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <sys/types.h>
+#include <unistd.h>
 
 class CgiHandler
 {
@@ -22,8 +24,7 @@ class CgiHandler
     public:
         CgiHandler(const std::string& cgiExecutable, const std::string& scriptPath);
         ~CgiHandler();
-
-        std::string executeCgi(const HttpRequest& req, const RouteResult& route);
+        pid_t executeCgi(const HttpRequest& req, const RouteResult& route, std::string& outFilename);
 };
 
 #endif

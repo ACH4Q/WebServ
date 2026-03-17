@@ -94,41 +94,37 @@ void CgiHandler::freeEnvp()
     }
 }
 
-std::string CgiHandler::executeCgi(const HttpRequest& req, const RouteResult& route) 
+pid_t CgiHandler::executeCgi(const HttpRequest& req, const RouteResult& route, std::string& outFilename) 
 {
     initEnv(req, route);
     char** envArray = mapToEnvp();
     
     int fdIn = -1;
     if (req.getMethod() == "POST" && !req.getBodyFilename().empty()) 
-    {
         fdIn = open(req.getBodyFilename().c_str(), O_RDONLY);
-    }
     
     std::ostringstream outNameStream;
     outNameStream << "./www/html/www/files/uploads/cgi_out_" << time(NULL) << "_" << getpid() << ".tmp";
-    std::string outFilename = outNameStream.str();
+    outFilename = outNameStream.str();
     
     int fdOut = open(outFilename.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0666);
     if (fdOut == -1) 
     {
         freeEnvp();
-        if (fdIn != -1)
-            close(fdIn);
-        return "HTTP/1.1 500 Internal Server Error\r\n\r\nFailed to create CGI output file.";
+        if (fdIn != -1) close(fdIn);
+        return -1;
     }
     
     pid_t pid = fork();
     if (pid == -1) 
     {
         freeEnvp();
-        if (fdIn != -1)
-            close(fdIn);
+        if (fdIn != -1) close(fdIn);
         close(fdOut);
-        return "HTTP/1.1 500 Internal Server Error\r\n\r\nFork failed.";
+        return -1;
     }
     
-    if (pid == 0) 
+    if (pid == 0)
     {
         if (fdIn != -1) 
         {
@@ -137,60 +133,16 @@ std::string CgiHandler::executeCgi(const HttpRequest& req, const RouteResult& ro
         }
         dup2(fdOut, STDOUT_FILENO);
         close(fdOut);
-        
         char* argv[3];
         argv[0] = const_cast<char*>(cgiExecutable.c_str());
         argv[1] = const_cast<char*>(scriptPath.c_str());
         argv[2] = NULL;
-        
         execve(argv[0], argv, envArray);
         exit(1); 
     }
     if (fdIn != -1)
         close(fdIn);
     close(fdOut);
-    time_t startTime = time(NULL);
-    int status;
-    bool timedOut = false;
-
-    while (true) 
-    {
-        pid_t res = waitpid(pid, &status, WNOHANG);
-        
-        if (res == pid)
-        {
-            break; 
-        } 
-        else if (res == -1)
-        {
-            break;
-        }
-        if (time(NULL) - startTime >= 10) 
-        {
-            kill(pid, SIGKILL);
-            waitpid(pid, &status, 0);
-            timedOut = true;
-            break;
-        }
-        
-        usleep(10000);
-    }
     freeEnvp();
-    if (timedOut) 
-    {
-        std::remove(outFilename.c_str());
-        return "HTTP/1.1 504 Gateway Timeout\r\n\r\nCGI Script timed out after 10 seconds.";
-    }
-    if (WIFEXITED(status) && WEXITSTATUS(status) != 0) 
-    {
-        std::remove(outFilename.c_str());
-        return "HTTP/1.1 502 Bad Gateway\r\n\r\nCGI Script Crashed.";
-    }
-    std::ifstream outFile(outFilename.c_str());
-    std::stringstream buffer;
-    buffer << outFile.rdbuf();
-    outFile.close();
-    std::remove(outFilename.c_str());
-    
-    return buffer.str();
+    return pid; 
 }

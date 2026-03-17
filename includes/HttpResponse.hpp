@@ -37,8 +37,11 @@ class HttpResponse : public HttpRequest, public Router {
         bool errorOccurred;
         static std::map<int, LargeFileTransfer> _pendingLargeTransfers;
     public :
+        HttpResponse();
+        bool isCgi;
+        pid_t cgiPid;
+        std::string cgiOutFilename;
         void generateResponse(const HttpRequest& req,  RouteResult& routeResult, int clientFd, const std::string& autoIndexContent);
-
         const std::string& getStatusLine() const;
         const std::map<std::string, std::string>& getResponseHeaders() const;
         const std::string& getResponseBody() const;

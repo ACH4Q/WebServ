@@ -108,3 +108,87 @@ void Event::run(SocketManager& manager, EpollManager& epollManager) {
         }
     }
 }
+
+void Event::sendCgiResponse(int clientFd, const std::string& outFilename, int statusCode, EpollManager& epollManager) 
+{
+    (void)epollManager;
+    if (statusCode == 504) 
+    {
+        std::string err = "HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        send(clientFd, err.c_str(), err.length(), MSG_NOSIGNAL);
+    } 
+    else if (statusCode == 502) 
+    {
+        std::string err = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        send(clientFd, err.c_str(), err.length(), MSG_NOSIGNAL);
+    } 
+    else 
+    {
+        std::ifstream outFile(outFilename.c_str());
+        if (outFile) 
+        {
+            std::stringstream buffer;
+            buffer << outFile.rdbuf();
+            std::string rawCgiOutput = buffer.str();
+            
+            // Format the final HTTP response (from your old logic)
+            std::string headersPart, bodyPart;
+            size_t headerEnd = rawCgiOutput.find("\r\n\r\n");
+            if (headerEnd != std::string::npos) {
+                headersPart = rawCgiOutput.substr(0, headerEnd);
+                bodyPart = rawCgiOutput.substr(headerEnd + 4);
+            } else {
+                bodyPart = rawCgiOutput;
+            }
+            
+            std::ostringstream finalResponse;
+            finalResponse << "HTTP/1.1 200 OK\r\n";
+            if (!headersPart.empty()) finalResponse << headersPart << "\r\n";
+            if (headersPart.find("Content-Type:") == std::string::npos) finalResponse << "Content-Type: text/html\r\n";
+            finalResponse << "Content-Length: " << bodyPart.length() << "\r\n\r\n" << bodyPart;
+            
+            std::string responseStr = finalResponse.str();
+            send(clientFd, responseStr.c_str(), responseStr.length(), MSG_NOSIGNAL);
+        }
+    }
+    
+    std::remove(outFilename.c_str());
+    close(clientFd);
+    requests.erase(clientFd);
+    clientServerIndex.erase(clientFd);
+}
+
+void Event::processCgiTasks(EpollManager& epollManager) 
+{
+    for (std::vector<CgiTask>::iterator it = cgiTasks.begin(); it != cgiTasks.end(); ) 
+    {
+        int status;
+        pid_t res = waitpid(it->pid, &status, WNOHANG);
+        if (res == it->pid)
+        {
+            int code = 200;
+            if (WIFEXITED(status) && WEXITSTATUS(status) != 0) code = 502;
+            sendCgiResponse(it->clientFd, it->outFilename, code, epollManager);
+            it = cgiTasks.erase(it);
+        } 
+        else if (res == 0)
+        {
+            if (time(NULL) - it->startTime >= 10)
+            {
+                kill(it->pid, SIGKILL);
+                waitpid(it->pid, &status, 0);
+                sendCgiResponse(it->clientFd, it->outFilename, 504, epollManager);
+                it = cgiTasks.erase(it);
+            } 
+            else 
+            {
+                ++it;
+            }
+        } 
+        else
+        {
+            sendCgiResponse(it->clientFd, it->outFilename, 502, epollManager);
+            it = cgiTasks.erase(it);
+        }
+    }
+}
