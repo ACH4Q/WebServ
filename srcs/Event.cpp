@@ -166,20 +166,29 @@ void Event::processCgiTasks(EpollManager& epollManager)
     for (std::vector<CgiTask>::iterator it = cgiTasks.begin(); it != cgiTasks.end(); ) 
     {
         int status;
-        pid_t res = waitpid(it->pid, &status, WNOHANG);
+        pid_t res = waitpid(it->pid, &status, WNOHANG); 
+
         if (res == it->pid)
         {
             int code = 200;
-            if (WIFEXITED(status) && WEXITSTATUS(status) != 0) code = 502;
+            if (WIFEXITED(status) && WEXITSTATUS(status) != 0) 
+                code = 502;
+            
+            std::cout << "[CGI Monitor] PID " << it->pid << " finished successfully." << std::endl;
             sendCgiResponse(it->clientFd, it->outFilename, code, epollManager);
             it = cgiTasks.erase(it);
         } 
         else if (res == 0)
         {
-            if (time(NULL) - it->startTime >= 10)
+            time_t elapsed = time(NULL) - it->startTime;
+            std::cout << "[CGI Monitor] PID " << it->pid << " running... (" << elapsed << "s / 10s)" << std::endl;
+
+            if (elapsed >= 10)
             {
+                std::cout << "🚨 10 SECONDS REACHED! ASSASSINATING PID: " << it->pid << " 🚨" << std::endl;
                 kill(it->pid, SIGKILL);
                 waitpid(it->pid, &status, 0);
+                
                 sendCgiResponse(it->clientFd, it->outFilename, 504, epollManager);
                 it = cgiTasks.erase(it);
             } 
@@ -190,6 +199,7 @@ void Event::processCgiTasks(EpollManager& epollManager)
         } 
         else
         {
+            std::cout << "[CGI Monitor] System Error on PID " << it->pid << std::endl;
             sendCgiResponse(it->clientFd, it->outFilename, 502, epollManager);
             it = cgiTasks.erase(it);
         }
