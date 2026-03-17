@@ -13,27 +13,21 @@ Event::Event() {}
 
 Event::~Event() {}
 
-void Event::run(SocketManager& manager, EpollManager& epollManager)
-{
-    processCgiTasks(epollManager); 
-    std::vector<struct epoll_event> readyEvents = epollManager.wait(10);
-    for (size_t i = 0; i < manager.getSockets().size(); ++i)
-    {
-        std::cout << "http://localhost:"
-                  << manager.getSockets()[i]->getPort()
-                  << std::endl;
+void Event::run(SocketManager& manager, EpollManager& epollManager) {
+    for (size_t i = 0; i < manager.getSockets().size(); ++i) {
+        std::cout << "http://localhost:" << manager.getSockets()[i]->getPort() << std::endl;
     }
 
     while (true) {
-        std::vector<struct epoll_event> readyEvents = epollManager.wait(-1);
-
+        processCgiTasks(epollManager);
+        std::vector<struct epoll_event> readyEvents = epollManager.wait(10);
+        
         for (size_t i = 0; i < readyEvents.size(); ++i) {
             int fd = readyEvents[i].data.fd;
             uint32_t events = readyEvents[i].events;
 
             bool isListeningSocket = false;
             size_t serverIndex = 0;
-
             for (size_t j = 0; j < manager.getSockets().size(); ++j) {
                 if (fd == manager.getSockets()[j]->getFd()) {
                     isListeningSocket = true;
@@ -42,12 +36,10 @@ void Event::run(SocketManager& manager, EpollManager& epollManager)
                 }
             }
 
-            if (isListeningSocket)
-            {
+            if (isListeningSocket) {
                 if ((_clientFd = accept(fd, NULL, NULL)) == -1) {
                     std::cerr << "Failed to accept new connection" << std::endl;
-                }
-                else
+                } else
                 {
                     int flags = fcntl(_clientFd, F_GETFL, 0);
                     fcntl(_clientFd, F_SETFL, flags | O_NONBLOCK);
@@ -57,11 +49,9 @@ void Event::run(SocketManager& manager, EpollManager& epollManager)
             }
             if (!isListeningSocket && (events & EPOLLIN || events & EPOLLOUT))
             {
-                if (HttpResponse::hasPendingLargeTransfer(fd))
-                {
+                if (HttpResponse::hasPendingLargeTransfer(fd)) {
                     bool done = HttpResponse::continueLargeTransfer(fd);
-                    if (done)
-                    {
+                    if (done) {
                         epollManager.ctrl(fd, 0, EPOLL_CTL_DEL);
                         close(fd);
                         requests.erase(fd);
@@ -85,23 +75,36 @@ void Event::run(SocketManager& manager, EpollManager& epollManager)
                         std::string autoIndexContent = autoIndex.generate(result.finalPath, requests[fd].getPath());
                         HttpResponse response;
                         response.generateResponse(requests[fd], result, fd, autoIndexContent);
-                        if (HttpResponse::hasPendingLargeTransfer(fd))
+                        if (response.isCgi) {
+                            if (response.cgiPid != -1) {
+                                CgiTask task;
+                                task.pid = response.cgiPid;
+                                task.clientFd = fd;
+                                task.outFilename = response.cgiOutFilename;
+                                task.startTime = time(NULL);
+                                cgiTasks.push_back(task);
+                                
+                                epollManager.ctrl(fd, 0, EPOLL_CTL_DEL);
+                            } else {
+                                epollManager.ctrl(fd, 0, EPOLL_CTL_DEL);
+                                close(fd);
+                                requests.erase(fd);
+                                clientServerIndex.erase(fd);
+                            }
+                        } else if (HttpResponse::hasPendingLargeTransfer(fd))
                         {
                             epollManager.ctrl(fd, EPOLLOUT, EPOLL_CTL_MOD);
                             requests.erase(fd);
-                        }
-                        else
+                        } else
                         {
                             epollManager.ctrl(fd, 0, EPOLL_CTL_DEL);
                             close(fd);
                             requests.erase(fd);
                             clientServerIndex.erase(fd);
                         }
-                        std::cout << "Response sent" << std::endl;
+                        std::cout << "Response processing completed" << std::endl;
                     }
-                }
-                else
-                {
+                } else {
                     epollManager.ctrl(fd, 0, EPOLL_CTL_DEL);
                     close(fd);
                     requests.erase(fd);
@@ -133,8 +136,6 @@ void Event::sendCgiResponse(int clientFd, const std::string& outFilename, int st
             std::stringstream buffer;
             buffer << outFile.rdbuf();
             std::string rawCgiOutput = buffer.str();
-            
-            // Format the final HTTP response (from your old logic)
             std::string headersPart, bodyPart;
             size_t headerEnd = rawCgiOutput.find("\r\n\r\n");
             if (headerEnd != std::string::npos) {
@@ -173,19 +174,15 @@ void Event::processCgiTasks(EpollManager& epollManager)
             int code = 200;
             if (WIFEXITED(status) && WEXITSTATUS(status) != 0) 
                 code = 502;
-            
-            std::cout << "[CGI Monitor] PID " << it->pid << " finished successfully." << std::endl;
             sendCgiResponse(it->clientFd, it->outFilename, code, epollManager);
             it = cgiTasks.erase(it);
         } 
         else if (res == 0)
         {
             time_t elapsed = time(NULL) - it->startTime;
-            std::cout << "[CGI Monitor] PID " << it->pid << " running... (" << elapsed << "s / 10s)" << std::endl;
 
             if (elapsed >= 10)
             {
-                std::cout << "🚨 10 SECONDS REACHED! ASSASSINATING PID: " << it->pid << " 🚨" << std::endl;
                 kill(it->pid, SIGKILL);
                 waitpid(it->pid, &status, 0);
                 
@@ -199,7 +196,6 @@ void Event::processCgiTasks(EpollManager& epollManager)
         } 
         else
         {
-            std::cout << "[CGI Monitor] System Error on PID " << it->pid << std::endl;
             sendCgiResponse(it->clientFd, it->outFilename, 502, epollManager);
             it = cgiTasks.erase(it);
         }
