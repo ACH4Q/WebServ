@@ -69,7 +69,7 @@ void HttpRequest::parse(std::string &rawBuffer)
                 }
                 else 
                 {
-                    if (errorCode == 0 && errorCode != 501) 
+                if (errorCode == 0) 
                         errorCode = 400;
                     state = Request_Finished; 
                 }
@@ -112,7 +112,7 @@ void HttpRequest::parse(std::string &rawBuffer)
                 {
                     if (!parseHeaders(line)) 
                     {
-                        if (errorCode == 0 && errorCode != 501) 
+                        if (errorCode == 0) 
                             errorCode = 400;
                         state = Request_Finished;
                         break;
@@ -296,14 +296,12 @@ void HttpRequest::reset()
     version.clear();
     headers.clear();
     storage.clear();
-    
-    if (bodyFd != -1) 
+    if (bodyFd != -1)
     {
         close(bodyFd);
         bodyFd = -1;
     }
-        
-    if (errorCode != 0 && !bodyFilename.empty()) 
+    if (errorCode != 0 && !bodyFilename.empty())
     {
         std::remove(bodyFilename.c_str());
     }
@@ -315,7 +313,6 @@ void HttpRequest::reset()
     errorCode = 0;
     hasCookies = false;
 }
-
 const std::string& HttpRequest::getMethod() const 
 { 
     return method; 

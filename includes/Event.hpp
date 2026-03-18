@@ -20,6 +20,7 @@ struct CgiTask
     pid_t pid;
     int clientFd;
     std::string outFilename;
+    std::string bodyFilename;
     time_t startTime;
     RouteResult routeResult;
 };

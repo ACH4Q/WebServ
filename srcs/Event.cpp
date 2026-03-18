@@ -109,6 +109,7 @@ void Event::run(SocketManager& manager, EpollManager& epollManager) {
                                 task.pid = response.cgiPid;
                                 task.clientFd = fd;
                                 task.outFilename = response.cgiOutFilename;
+                                task.bodyFilename = requests[fd].getBodyFilename();
                                 task.startTime = time(NULL);
                                 task.routeResult = result;
                                 cgiTasks.push_back(task);
@@ -203,7 +204,10 @@ void Event::sendCgiResponse(const CgiTask& task, int statusCode)
         }
     }
     
-    std::remove(task.outFilename.c_str());
+    std::remove(task.outFilename.c_str()); 
+    if (!task.bodyFilename.empty()) {
+        std::remove(task.bodyFilename.c_str());
+    }
     close(task.clientFd);
     requests.erase(task.clientFd);
     clientServerIndex.erase(task.clientFd);
