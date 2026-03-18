@@ -69,8 +69,7 @@ void HttpRequest::parse(std::string &rawBuffer)
                 }
                 else 
                 {
-                    if (errorCode == 0) 
-                        errorCode = 400;
+                    errorCode = 400;
                     state = Request_Finished; 
                 }
             } 
@@ -154,7 +153,7 @@ bool HttpRequest::parseRequestLine(std::string &line)
     }
     if (method != "GET" && method != "POST" && method != "DELETE")
     {
-        // errorCode = 501;
+        errorCode = 501;
         return false;
     }
     if (version != "HTTP/1.1")
