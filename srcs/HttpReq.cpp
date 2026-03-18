@@ -154,7 +154,7 @@ bool HttpRequest::parseRequestLine(std::string &line)
     }
     if (method != "GET" && method != "POST" && method != "DELETE")
     {
-        errorCode = 501;
+        // errorCode = 501;
         return false;
     }
     if (version != "HTTP/1.1")
