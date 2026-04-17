@@ -48,6 +48,7 @@ class HttpRequest
         const std::string&                  getVersion() const;
         const std::string&                  getBodyFilename() const; 
         const std::map<std::string, std::string>& getHeaders() const;
+        std::string                         getHost() const;
         RequestParseState                   getState() const;
         int                                 getErrorCode() const;
         bool                                getHasCookies() const;

@@ -1,6 +1,6 @@
 NAME        = webserv
 CC          = c++ 
-FLAGS       = -Wall -Wextra -Werror -std=c++98
+FLAGS       = -Wall -Wextra -Werror -std=c++98 
 INCLUDES    = -I includes/
 SRCS        = srcs/AutoIndex.cpp \
 	srcs/Cgi.cpp \

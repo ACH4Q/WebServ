@@ -5,7 +5,8 @@
 #include <cstdio>  
 #include <ctime>   
 #include <fcntl.h>  
-#include <unistd.h> 
+#include <unistd.h>
+#include <cctype>
 
 HttpRequest::HttpRequest() : bodyFd(-1), bodyBytesWritten(0), state(Request_Line), contentLength(0), errorCode(0), hasCookies(false) {}
 
@@ -336,6 +337,37 @@ const std::string& HttpRequest::getVersion() const
 const std::map<std::string, std::string>& HttpRequest::getHeaders() const 
 { 
     return headers; 
+}
+
+std::string HttpRequest::getHost() const
+{
+    std::map<std::string, std::string>::const_iterator it = headers.find("Host");
+    if (it == headers.end())
+        return "";
+
+    std::string host = it->second;
+    size_t first = host.find_first_not_of(" \t");
+    if (first == std::string::npos)
+        return "";
+    size_t last = host.find_last_not_of(" \t\r\n");
+    host = host.substr(first, last - first + 1);
+
+    size_t colon = host.find_last_of(':');
+    if (colon != std::string::npos && colon > 0)
+    {
+        bool allDigit = true;
+        for (size_t i = colon + 1; i < host.size(); ++i)
+        {
+            if (!std::isdigit(static_cast<unsigned char>(host[i])))
+            {
+                allDigit = false;
+                break;
+            }
+        }
+        if (allDigit && colon + 1 < host.size())
+            host = host.substr(0, colon);
+    }
+    return host;
 }
 
 int HttpRequest::getErrorCode() const
